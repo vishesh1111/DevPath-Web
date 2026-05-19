@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 import { useGamification } from '@/context/GamificationContext';
+import QuizComponent from './QuizComponent';
 
 interface RoadmapModalProps {
     isOpen: boolean;
@@ -63,13 +64,7 @@ export function RoadmapModal({
 }: RoadmapModalProps) {
     const [mounted, setMounted] = useState(false);
     const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
-
     const [showQuiz, setShowQuiz] = useState(false);
-    const [currentQuestion, setCurrentQuestion] = useState(0);
-    const [selectedAnswer, setSelectedAnswer] = useState('');
-    const [score, setScore] = useState(0);
-    const [showResult, setShowResult] = useState(false);
-    const [showFeedback, setShowFeedback] = useState(false);
 
     const { addXp } = useGamification();
 
@@ -82,10 +77,6 @@ export function RoadmapModal({
         if (isOpen) {
             setCurrentPhaseIndex(0);
             setShowQuiz(false);
-            setCurrentQuestion(0);
-            setSelectedAnswer('');
-            setScore(0);
-            setShowResult(false);
         }
     }, [isOpen]);
 
@@ -113,38 +104,6 @@ export function RoadmapModal({
         }
 
         onClose();
-    };
-
-    const handleQuizSubmit = () => {
-        const currentQuiz = quizQuestions[currentQuestion];
-
-        setShowFeedback(true);
-
-        let updatedScore = score;
-
-        if (selectedAnswer === currentQuiz.answer) {
-            updatedScore += 1;
-            setScore(updatedScore);
-        }
-
-        setTimeout(() => {
-            setShowFeedback(false);
-
-            if (currentQuestion < quizQuestions.length - 1) {
-                setCurrentQuestion((prev) => prev + 1);
-                setSelectedAnswer('');
-            } else {
-                setShowResult(true);
-
-                if (updatedScore === quizQuestions.length) {
-                    addXp(350, 'Perfect Quiz Score!');
-                } else if (
-                    updatedScore >= Math.ceil(quizQuestions.length * 0.7)
-                ) {
-                    addXp(200, 'Passed Quiz Successfully!');
-                }
-            }
-        }, 1200);
     };
 
     return createPortal(
@@ -335,139 +294,14 @@ export function RoadmapModal({
                         </>
                     ) : (
                         <div className="p-6">
-                            {!showResult ? (
-                                <div className="space-y-6">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-2xl font-bold">
-                                            Quiz Time 🚀
-                                        </h3>
-
-                                        <span className="text-sm text-muted-foreground">
-                                            Question {currentQuestion + 1} /{' '}
-                                            {quizQuestions.length}
-                                        </span>
-                                    </div>
-
-                                    <div className="bg-muted/20 border border-border rounded-2xl p-6">
-                                        <h2 className="text-xl font-semibold mb-6">
-                                            {
-                                                quizQuestions[currentQuestion]
-                                                    .question
-                                            }
-                                        </h2>
-
-                                        <div className="space-y-4">
-                                            {quizQuestions[
-                                                currentQuestion
-                                            ].options.map((option) => {
-                                                const isCorrect =
-                                                    option ===
-                                                    quizQuestions[
-                                                        currentQuestion
-                                                    ].answer;
-
-                                                const isSelected =
-                                                    selectedAnswer === option;
-
-                                                return (
-                                                    <button
-                                                        key={option}
-                                                        disabled={showFeedback}
-                                                        onClick={() =>
-                                                            setSelectedAnswer(
-                                                                option
-                                                            )
-                                                        }
-                                                        className={`w-full text-left p-4 rounded-xl border transition-all ${
-                                                            isSelected
-                                                                ? 'border-primary bg-primary/10'
-                                                                : 'border-border bg-muted/20'
-                                                        } ${
-                                                            showFeedback &&
-                                                            isCorrect
-                                                                ? 'border-green-500 bg-green-500/10'
-                                                                : ''
-                                                        } ${
-                                                            showFeedback &&
-                                                            isSelected &&
-                                                            !isCorrect
-                                                                ? 'border-red-500 bg-red-500/10'
-                                                                : ''
-                                                        }`}
-                                                    >
-                                                        {option}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {showFeedback && (
-                                            <div
-                                                className={`mt-5 text-sm font-semibold ${
-                                                    selectedAnswer ===
-                                                    quizQuestions[
-                                                        currentQuestion
-                                                    ].answer
-                                                        ? 'text-green-500'
-                                                        : 'text-red-500'
-                                                }`}
-                                            >
-                                                {selectedAnswer ===
-                                                quizQuestions[currentQuestion]
-                                                    .answer
-                                                    ? 'Correct Answer 🎉'
-                                                    : 'Wrong Answer ❌'}
-                                            </div>
-                                        )}
-
-                                        <button
-                                            disabled={!selectedAnswer}
-                                            onClick={handleQuizSubmit}
-                                            className="mt-6 w-full py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold disabled:opacity-50"
-                                        >
-                                            {currentQuestion ===
-                                            quizQuestions.length - 1
-                                                ? 'Finish Quiz'
-                                                : 'Submit Answer'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-12">
-                                    <h2 className="text-4xl font-bold mb-4">
-                                        Quiz Completed 🎉
-                                    </h2>
-
-                                    <p className="text-xl text-muted-foreground mb-6">
-                                        Your Score: {score} /{' '}
-                                        {quizQuestions.length}
-                                    </p>
-
-                                    {score === quizQuestions.length ? (
-                                        <p className="text-green-500 font-semibold text-lg">
-                                            Perfect Score! +350 XP Awarded 🚀
-                                        </p>
-                                    ) : score >=
-                                      Math.ceil(
-                                          quizQuestions.length * 0.7
-                                      ) ? (
-                                        <p className="text-primary font-semibold text-lg">
-                                            Great Job! +200 XP Awarded 🎯
-                                        </p>
-                                    ) : (
-                                        <p className="text-yellow-500 font-semibold text-lg">
-                                            Keep Practicing 💡
-                                        </p>
-                                    )}
-
-                                    <button
-                                        onClick={() => setShowQuiz(false)}
-                                        className="mt-8 px-6 py-3 rounded-xl bg-primary text-white font-semibold"
-                                    >
-                                        Back to Pathway
-                                    </button>
-                                </div>
-                            )}
+                            <QuizComponent 
+                                quizId={`roadmap-${roadmap.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-quiz`}
+                                questions={quizQuestions}
+                                onComplete={() => {
+                                    setShowQuiz(false);
+                                    handleComplete();
+                                }}
+                            />
                         </div>
                     )}
                 </motion.div>
