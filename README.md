@@ -60,7 +60,7 @@ This project leverages a modern and powerful technology stack:
 
 | Home Page | Community |
 | :---: | :---: |
-| <img src="public/screenshot-home.png" alt="Home Page" width="400"/> | <img src="public/screenshot-community.png" alt="Community" width="400"/> |
+| <img src="public/screenshot-home.png" alt="Home Page" height="250"/> | <img src="public/screenshot-community.png" alt="Community" height="250"/> |
 
 ## 🏁 Getting Started
 
