@@ -9,8 +9,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 export default function SuperAdminLogin() {
     const { user } = useAuth();
@@ -49,10 +48,12 @@ export default function SuperAdminLogin() {
 
             sessionStorage.setItem('admin_session_key', key.trim());
 
-            // 2. Authenticate with Firebase Auth
-            // This is required for Firestore Rules to allow writes
+            // 2. Verify Authentication Context
+            // User must already be authenticated from the main site to perform actions
             if (!auth.currentUser || auth.currentUser.email !== SUPER_ADMIN_EMAIL) {
-                await signInWithEmailAndPassword(auth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD);
+                setError("You must be logged in with the Super Admin account first.");
+                setLoading(false);
+                return;
             }
 
             setIsAuthenticated(true);
@@ -65,7 +66,20 @@ export default function SuperAdminLogin() {
         }
     };
 
-    if (user && user.email !== SUPER_ADMIN_EMAIL) {
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+                <Shield size={48} className="text-red-500 mb-4" />
+                <h1 className="text-2xl font-bold text-white mb-2">Restricted Access</h1>
+                <p className="text-zinc-400 mb-6 text-center max-w-sm">You must be logged in with a Super Admin account to access this page.</p>
+                <button onClick={() => router.push('/')} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                    Go to Login
+                </button>
+            </div>
+        );
+    }
+
+    if (user.email !== SUPER_ADMIN_EMAIL) {
         return <div className="min-h-screen flex items-center justify-center">Unauthorized</div>;
     }
 

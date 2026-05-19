@@ -20,8 +20,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 
 const POINTS = {
     DAILY_LOGIN: 0,

@@ -16,8 +16,8 @@ initializeApp({
 const auth = getAuth();
 const db = getFirestore();
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 
 async function createSuperAdmin() {
     console.log(`Creating/Updating Super Admin: ${SUPER_ADMIN_EMAIL}...`);

@@ -20,8 +20,7 @@ import { db } from '@/lib/firebase';
 import Image from 'next/image';
 import { calculateUserPointsAndBadges } from '@/lib/point-calculation';
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 interface AdminDashboardProps {
     initialAuth?: boolean;
