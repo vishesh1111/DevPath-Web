@@ -38,6 +38,17 @@ const categories = [
     }
 ];
 
+/**
+ * Converts a kebab-case slug into a human-readable Title Case label.
+ * e.g. "community-offerings" → "Community Offerings"
+ */
+function slugToLabel(slug: string): string {
+    return slug
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
 export default function WikiPage() {
     const [activeArticle, setActiveArticle] = useState("intro");
     const [searchQuery, setSearchQuery] = useState("");
@@ -117,9 +128,17 @@ export default function WikiPage() {
                 <div className={styles.breadcrumb}>
                     <span>Docs</span>
                     <ChevronRight size={14} />
-                    <span>{categories.find(c => c.items.some(i => i.id === activeArticle))?.title}</span>
+                    {/* Defensive: fall back to a formatted slug label if no category matches */}
+                    <span>
+                        {categories.find(c => c.items.some(i => i.id === activeArticle))?.title
+                            ?? slugToLabel(activeArticle)}
+                    </span>
                     <ChevronRight size={14} />
-                    <span>{wikiContent[activeArticle]?.title}</span>
+                    {/* Defensive: fall back to a formatted slug label if wikiContent entry is missing */}
+                    <span>
+                        {wikiContent[activeArticle]?.title
+                            ?? slugToLabel(activeArticle)}
+                    </span>
                 </div>
 
                 <article>
