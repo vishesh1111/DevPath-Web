@@ -8,44 +8,41 @@ import Sponsors from '@/components/home/Sponsors';
 import Mission from '@/components/home/Mission';
 import CodingNews from '@/components/home/CodingNews';
 import PastCollaborations from '@/components/home/PastCollaborations';
+
 import BackToTop from '@/components/BackToTop';
 
 export default function Home() {
   return (
     <>
-    <main className="min-h-screen bg-background">
-      <FloatingParticles />
-      <Hero />
+      <main className="min-h-screen bg-background">
+        <FloatingParticles />
 
+        <Hero />
 
-
-      <SectionEntrance delay={0.1}>
-        <CodingNews />
-      </SectionEntrance>
-
-
-
-
-
-      <SectionEntrance>
-        <SectionDivider />
-      </SectionEntrance>
-
-      <div id="sponsors-section">
-        <SectionEntrance delay={0.2}>
-          <Sponsors />
+        <SectionEntrance delay={0.1}>
+          <CodingNews />
         </SectionEntrance>
-      </div>
 
-      <SectionEntrance delay={0.2}>
-        <PastCollaborations />
-      </SectionEntrance>
+        <SectionEntrance>
+          <SectionDivider />
+        </SectionEntrance>
 
-      <SectionEntrance delay={0.2}>
-        <Mission />
-      </SectionEntrance>
-    </main>
-    <BackToTop />
+        <div id="sponsors-section">
+          <SectionEntrance delay={0.2}>
+            <Sponsors />
+          </SectionEntrance>
+        </div>
+
+        <SectionEntrance delay={0.2}>
+          <PastCollaborations />
+        </SectionEntrance>
+
+        <SectionEntrance delay={0.2}>
+          <Mission />
+        </SectionEntrance>
+      </main>
+
+      <BackToTop />
     </>
   );
 }
