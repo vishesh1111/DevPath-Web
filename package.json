@@ -15,7 +15,7 @@
     "@react-three/fiber": "^9.4.2",
     "canvas-confetti": "^1.9.4",
     "dompurify": "^3.4.5",
-    "firebase": "^12.7.0",
+    "firebase": "^12.13.0",
     "firebase-admin": "^13.6.0",
     "framer-motion": "^12.23.26",
     "github-markdown-css": "^5.8.1",
