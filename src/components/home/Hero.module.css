@@ -26,6 +26,22 @@
     animation: fadeUp 0.8s ease-out 0.2s backwards;
 }
 
+.statsItem {
+    animation: fadeUp 0.8s ease-out backwards;
+}
+
+.statsItem:nth-child(1) {
+    animation-delay: 0.2s;
+}
+
+.statsItem:nth-child(2) {
+    animation-delay: 0.4s;
+}
+
+.statsItem:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
 .ctas {
     display: flex;
     gap: 20px;

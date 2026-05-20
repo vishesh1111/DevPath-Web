@@ -9,13 +9,70 @@ import InteractiveBackground from '../ui/InteractiveBackground';
 import styles from './Hero.module.css';
 
 import { MagneticText } from '../ui/magnetic-text';
-import AppStoreButtons from '../ui/AppStoreButtons';
 
 import LatestEventsHighlight from './LatestEventsHighlight';
 import InternshipCalendarCard from './InternshipCalendarCard';
 import CertificateCard from './CertificateCard';
+import { useEffect, useState, useRef } from 'react';
 
 const HeaderScene = dynamic(() => import('@/components/3d/HeaderScene'), { ssr: false });
+
+function AnimatedCounter({
+    target,
+    suffix = "",
+    duration = 2000,
+}: {
+    target: number;
+    suffix?: string;
+    duration?: number;
+}) {
+    const [count, setCount] = useState(0);
+    const [started, setStarted] = useState(false);
+    const ref = useRef<HTMLSpanElement | null>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setStarted(true);
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.5 }
+        );
+
+        if (ref.current) observer.observe(ref.current);
+
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!started) return;
+
+        let startTimestamp: number | null = null;
+
+        const step = (timestamp: number) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+
+            setCount(Math.floor(progress * target));
+
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            }
+        };
+
+        requestAnimationFrame(step);
+    }, [started, target, duration]);
+
+    return (
+        <span ref={ref}>
+            {count}
+            {suffix}
+        </span>
+    );
+}
 
 export default function Hero() {
     const scrollToSection = (id: string) => {
@@ -50,16 +107,22 @@ export default function Hero() {
                 </p>
 
                 <div className="flex flex-wrap justify-center gap-8 my-8">
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">500+</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={500} suffix="+" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Active Developers</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">50+</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={50} suffix="+" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Open Source Projects</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">24/7</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={24} suffix="/7" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Peer Support</span>
                     </div>
                 </div>
@@ -70,12 +133,7 @@ export default function Hero() {
                             Join Community
                         </Button>
                     </Link>
-                    
-                    <div className="text-muted-foreground/50 font-medium px-2 py-2 sm:py-0">
-                        — or —
-                    </div>
-                    
-                    <AppStoreButtons variant="hero" />
+
                 </div>
 
             </div>
