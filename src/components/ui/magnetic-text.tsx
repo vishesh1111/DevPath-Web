@@ -11,7 +11,6 @@ interface MagneticTextProps {
 }
 
 export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", className }: MagneticTextProps) {
-    const containerRef = useRef<HTMLDivElement>(null)
     const overlayRef = useRef<HTMLDivElement>(null)
 
 
@@ -20,6 +19,7 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
     const currentRadius = useRef(0)
     const targetRadius = useRef(0)
     const animationFrameRef = useRef<number>(0)
+    const overlayRectRef = useRef<DOMRect | null>(null)
 
     // Smooth animation loop
     useEffect(() => {
@@ -34,14 +34,19 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
             currentRadius.current = lerp(currentRadius.current, targetRadius.current, 0.2)
 
             // Update clip-path
-            if (overlayRef.current && containerRef.current) {
-                const overlayRect = overlayRef.current.getBoundingClientRect()
-                const containerRect = containerRef.current.getBoundingClientRect()
+            if (overlayRef.current) {
+                // Cache overlay rect for performance (update only when needed)
+                const overlayRect = overlayRectRef.current || overlayRef.current.getBoundingClientRect()
+                overlayRectRef.current = overlayRect
 
-                // Calculate mouse position relative to the overlay
-                // Overlay is centered, so we need to offset by the difference in top/left
-                const xRelative = currentPos.current.x + (overlayRect.width / 2 - containerRect.width / 2)
-                const yRelative = currentPos.current.y + (overlayRect.height / 2 - containerRect.height / 2)
+                // Calculate mouse position relative to overlay's coordinate space
+                // This automatically handles transforms, scales, and parent positioning
+                let xRelative = currentPos.current.x - overlayRect.left
+                let yRelative = currentPos.current.y - overlayRect.top
+
+                // Clamp coordinates to overlay bounds to prevent visual artifacts
+                xRelative = Math.max(0, Math.min(xRelative, overlayRect.width))
+                yRelative = Math.max(0, Math.min(yRelative, overlayRect.height))
 
                 overlayRef.current.style.clipPath = `circle(${currentRadius.current}px at ${xRelative}px ${yRelative}px)`
             }
@@ -55,21 +60,22 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
         }
     }, [])
 
-    // Track mouse position
+    // Track mouse position in viewport coordinates
     const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        if (!containerRef.current) return
-        const rect = containerRef.current.getBoundingClientRect()
+        // Store viewport coordinates - decoupled from element positioning
         mousePos.current = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
+            x: e.clientX,
+            y: e.clientY,
         }
     }, [])
 
     const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        if (!containerRef.current) return
-        const rect = containerRef.current.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
+        // Invalidate cached rect to ensure fresh calculation
+        overlayRectRef.current = null
+
+        // Store viewport coordinates - decoupled from element positioning
+        const x = e.clientX
+        const y = e.clientY
         mousePos.current = { x, y }
         currentPos.current = { x, y }
         targetRadius.current = 75 // 150px diameter
@@ -83,12 +89,17 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
 
     // Accessibility focus
     const handleFocus = useCallback(() => {
+        // Invalidate cached rect to ensure fresh calculation
+        overlayRectRef.current = null
 
         targetRadius.current = 75
-        if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect()
-            mousePos.current = { x: rect.width / 2, y: rect.height / 2 }
-            currentPos.current = { x: rect.width / 2, y: rect.height / 2 }
+        if (overlayRef.current) {
+            // Center on overlay in viewport coordinates
+            const rect = overlayRef.current.getBoundingClientRect()
+            const centerX = rect.left + rect.width / 2
+            const centerY = rect.top + rect.height / 2
+            mousePos.current = { x: centerX, y: centerY }
+            currentPos.current = { x: centerX, y: centerY }
         }
     }, [])
 
@@ -97,18 +108,23 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
         targetRadius.current = 0
     }, [])
 
-    // Mobile check
+    // Mobile check and resize handling
     const [isMobile, setIsMobile] = useState(false)
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        const handleResize = () => {
+            checkMobile()
+            // Invalidate cached rect on resize since overlay position may change
+            overlayRectRef.current = null
+        }
+
         checkMobile()
-        window.addEventListener('resize', checkMobile)
-        return () => window.removeEventListener('resize', checkMobile)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
     }, [])
 
     return (
         <div
-            ref={containerRef}
             onMouseMove={handleMouseMove}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -123,7 +139,7 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
             )}
         >
             {/* Base text layer */}
-            <span className="text-5xl font-bold tracking-tighter text-foreground tracking-wide">{text}</span>
+            <span className="text-5xl font-bold tracking-tighter text-foreground">{text}</span>
 
             {/* Overlay layer with clip-path */}
             <div
@@ -134,7 +150,7 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
                     clipPath: "circle(0px at 50% 50%)"
                 }}
             >
-                <span className="text-5xl font-bold tracking-tighter text-background whitespace-nowrap tracking-wide">
+                <span className="text-5xl font-bold tracking-tighter text-background whitespace-nowrap">
                     {hoverText}
                 </span>
             </div>
