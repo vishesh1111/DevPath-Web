@@ -781,7 +781,9 @@ useEffect(() => {
                                 ) : (
                                     <div className="min-h-[300px] p-4 bg-background border border-border rounded-lg">
                                         <div className="markdown-body">
-                                            <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>{aboutContent}</ReactMarkdown>
+                                            <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
+                                                {DOMPurify.sanitize(aboutContent)}
+                                            </ReactMarkdown>
                                         </div>
                                     </div>
                                 )}
@@ -793,7 +795,7 @@ useEffect(() => {
                         ) : (
                             <div className="markdown-body">
                                 <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                                    {user.aboutMarkdown || "No description provided yet."}
+                                    {DOMPurify.sanitize(user.aboutMarkdown || "No description provided yet.")}
                                 </ReactMarkdown>
                             </div>
                         )}

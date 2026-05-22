@@ -3,9 +3,6 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { Target, ExternalLink, Github, Edit3, Play, Maximize2, Star } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
-import remarkGfm from 'remark-gfm';
 import { useAuth } from '@/context/AuthContext';
 import { doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';

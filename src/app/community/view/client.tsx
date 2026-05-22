@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageSquare, Send, Loader2, Share2, Heart, Handshake, Lightbulb, PartyPopper, Smile } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import DOMPurify from 'dompurify';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 
@@ -185,7 +186,7 @@ export default function DiscussionViewClient() {
 
                     <div className="prose prose-invert max-w-none">
                         <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                            {discussion.content}
+                            {DOMPurify.sanitize(discussion.content)}
                         </ReactMarkdown>
                     </div>
 
@@ -267,7 +268,7 @@ export default function DiscussionViewClient() {
                             </div>
                             <div className="prose prose-invert max-w-none text-sm">
                                 <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                                    {reply.content}
+                                    {DOMPurify.sanitize(reply.content)}
                                 </ReactMarkdown>
                             </div>
                         </div>
