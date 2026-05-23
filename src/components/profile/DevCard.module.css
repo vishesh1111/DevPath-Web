@@ -15,13 +15,82 @@
   max-width: 880px;
   border-radius: 24px;
   overflow: hidden;
-  background: linear-gradient(140deg, #0d1117 0%, #0a0e27 50%, #0d0520 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  --devcard-surface-start: #ffffff;
+  --devcard-surface-mid: #f6f9ff;
+  --devcard-surface-end: #eef2ff;
+  --devcard-border: rgba(15, 23, 42, 0.08);
+  --devcard-shadow-primary: rgba(15, 23, 42, 0.14);
+  --devcard-shadow-accent: rgba(0, 212, 255, 0.10);
+  --devcard-text: #0f172a;
+  --devcard-text-muted: rgba(15, 23, 42, 0.70);
+  --devcard-text-soft: rgba(15, 23, 42, 0.54);
+  --devcard-text-faint: rgba(15, 23, 42, 0.42);
+  --devcard-text-subtle: rgba(15, 23, 42, 0.32);
+  --devcard-panel: rgba(15, 23, 42, 0.03);
+  --devcard-panel-border: rgba(15, 23, 42, 0.08);
+  --devcard-grid-dot: rgba(15, 23, 42, 0.05);
+  --devcard-footer-bg: rgba(255, 255, 255, 0.72);
+  --devcard-footer-border: rgba(15, 23, 42, 0.08);
+  --devcard-footer-url: rgba(15, 23, 42, 0.54);
+  --devcard-line: rgba(15, 23, 42, 0.06);
+  --devcard-progress-track: rgba(15, 23, 42, 0.08);
+  --devcard-badge-bg: rgba(15, 23, 42, 0.04);
+  --devcard-badge-bg-hover: rgba(15, 23, 42, 0.07);
+  --devcard-badge-border: rgba(15, 23, 42, 0.08);
+  --devcard-lang-name: rgba(15, 23, 42, 0.60);
+  --devcard-lang-pct: rgba(15, 23, 42, 0.42);
+  --devcard-empty: rgba(15, 23, 42, 0.32);
+  --devcard-btn-secondary-bg: rgba(15, 23, 42, 0.05);
+  --devcard-btn-secondary-text: rgba(15, 23, 42, 0.78);
+  --devcard-btn-secondary-border: rgba(15, 23, 42, 0.10);
+  --devcard-btn-secondary-hover: rgba(15, 23, 42, 0.09);
+  --devcard-btn-success-bg: rgba(16, 185, 129, 0.12);
+  --devcard-btn-success-text: #059669;
+  --devcard-btn-success-border: rgba(16, 185, 129, 0.28);
+  --devcard-ring-inner: #ffffff;
+  background: linear-gradient(140deg, var(--devcard-surface-start) 0%, var(--devcard-surface-mid) 50%, var(--devcard-surface-end) 100%);
+  border: 1px solid var(--devcard-border);
   box-shadow:
-    0 0 0 1px rgba(0, 212, 255, 0.10),
-    0 40px 96px -20px rgba(0, 0, 0, 0.75),
-    0 0 80px -24px rgba(0, 212, 255, 0.12);
-  color: #fff;
+    0 0 0 1px var(--devcard-shadow-accent),
+    0 40px 96px -20px var(--devcard-shadow-primary),
+    0 0 80px -24px var(--devcard-shadow-accent);
+  color: var(--devcard-text);
+}
+
+:global(.dark) .card {
+  --devcard-surface-start: #0d1117;
+  --devcard-surface-mid: #0a0e27;
+  --devcard-surface-end: #0d0520;
+  --devcard-border: rgba(255, 255, 255, 0.08);
+  --devcard-shadow-primary: rgba(0, 0, 0, 0.75);
+  --devcard-shadow-accent: rgba(0, 212, 255, 0.12);
+  --devcard-text: #ffffff;
+  --devcard-text-muted: rgba(255, 255, 255, 0.70);
+  --devcard-text-soft: rgba(255, 255, 255, 0.45);
+  --devcard-text-faint: rgba(255, 255, 255, 0.40);
+  --devcard-text-subtle: rgba(255, 255, 255, 0.30);
+  --devcard-panel: rgba(255, 255, 255, 0.03);
+  --devcard-panel-border: rgba(255, 255, 255, 0.07);
+  --devcard-grid-dot: rgba(255, 255, 255, 0.04);
+  --devcard-footer-bg: rgba(0, 0, 0, 0.25);
+  --devcard-footer-border: rgba(255, 255, 255, 0.05);
+  --devcard-footer-url: rgba(255, 255, 255, 0.20);
+  --devcard-line: rgba(255, 255, 255, 0.06);
+  --devcard-progress-track: rgba(255, 255, 255, 0.07);
+  --devcard-badge-bg: rgba(255, 255, 255, 0.04);
+  --devcard-badge-bg-hover: rgba(255, 255, 255, 0.07);
+  --devcard-badge-border: rgba(255, 255, 255, 0.08);
+  --devcard-lang-name: rgba(255, 255, 255, 0.55);
+  --devcard-lang-pct: rgba(255, 255, 255, 0.35);
+  --devcard-empty: rgba(255, 255, 255, 0.30);
+  --devcard-btn-secondary-bg: rgba(255, 255, 255, 0.06);
+  --devcard-btn-secondary-text: rgba(255, 255, 255, 0.80);
+  --devcard-btn-secondary-border: rgba(255, 255, 255, 0.12);
+  --devcard-btn-secondary-hover: rgba(255, 255, 255, 0.10);
+  --devcard-btn-success-bg: rgba(16, 185, 129, 0.15);
+  --devcard-btn-success-text: #34d399;
+  --devcard-btn-success-border: rgba(16, 185, 129, 0.30);
+  --devcard-ring-inner: #0d1117;
 }
 
 /* Ambient glow blobs */
@@ -41,7 +110,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--devcard-grid-dot) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
   z-index: 0;
@@ -59,7 +128,7 @@
 /* ── Left Panel ────────────────────────────────────────────────────── */
 .leftPanel {
   padding: 32px 22px 28px;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--devcard-line);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -92,7 +161,7 @@
   position: absolute;
   inset: 2.5px;
   border-radius: 50%;
-  background: #0d1117;
+  background: var(--devcard-ring-inner);
 }
 
 .avatar {
@@ -123,7 +192,7 @@
   text-align: center;
   letter-spacing: -0.02em;
   line-height: 1.25;
-  color: #fff;
+  color: var(--devcard-text);
   margin: 0;
   word-break: break-word;
 }
@@ -156,7 +225,7 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--devcard-text-soft);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -181,21 +250,21 @@
 .progressLabel {
   font-size: 10px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--devcard-text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
 
 .progressPct {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--devcard-text-faint);
   font-weight: 600;
 }
 
 .progressTrack {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--devcard-progress-track);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -221,8 +290,8 @@
 }
 
 .statCard {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--devcard-panel);
+  border: 1px solid var(--devcard-panel-border);
   border-radius: 14px;
   padding: 12px 10px 10px;
   display: flex;
@@ -251,7 +320,7 @@
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
-  color: #fff;
+  color: var(--devcard-text);
 }
 
 .statValue.cyan {
@@ -278,7 +347,7 @@
 .statLabel {
   font-size: 9.5px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.38);
+  color: var(--devcard-text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
@@ -292,7 +361,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--devcard-text-subtle);
   margin-bottom: -4px;
 }
 
@@ -313,18 +382,18 @@
   align-items: center;
   gap: 5px;
   padding: 4px 9px 4px 7px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--devcard-badge-bg);
+  border: 1px solid var(--devcard-badge-border);
   border-radius: 20px;
   font-size: 11px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--devcard-text-muted);
   white-space: nowrap;
   transition: background 0.2s;
 }
 
 .badge:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--devcard-badge-bg-hover);
 }
 
 .badgeMore {
@@ -361,7 +430,7 @@
 
 .langName {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--devcard-lang-name);
   width: 76px;
   flex-shrink: 0;
   font-weight: 500;
@@ -373,7 +442,7 @@
 .langBar {
   flex: 1;
   height: 4px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--devcard-progress-track);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -386,7 +455,7 @@
 
 .langPct {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--devcard-lang-pct);
   width: 26px;
   text-align: right;
   flex-shrink: 0;
@@ -398,7 +467,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--devcard-empty);
   font-size: 12px;
   font-style: italic;
   margin: auto 0;
@@ -407,19 +476,19 @@
 /* ── Footer ────────────────────────────────────────────────────────── */
 .footer {
   grid-column: 1 / -1;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--devcard-footer-border);
   padding: 10px 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--devcard-footer-bg);
 }
 
 .footerBrand {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: rgba(0, 212, 255, 0.6);
+  color: rgba(0, 212, 255, 0.75);
   text-transform: uppercase;
 }
 
@@ -428,7 +497,7 @@
   align-items: center;
   gap: 3px;
   font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--devcard-footer-url);
   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 }
 
@@ -472,21 +541,21 @@
 }
 
 .btnSecondary {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--devcard-btn-secondary-bg);
+  color: var(--devcard-btn-secondary-text);
+  border: 1px solid var(--devcard-btn-secondary-border);
 }
 
 .btnSecondary:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--devcard-btn-secondary-hover);
+  border-color: rgba(0, 212, 255, 0.20);
   transform: translateY(-2px);
 }
 
 .btnSuccess {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--devcard-btn-success-bg);
+  color: var(--devcard-btn-success-text);
+  border: 1px solid var(--devcard-btn-success-border);
 }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
@@ -497,7 +566,7 @@
 
   .leftPanel {
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--devcard-line);
     padding: 22px 18px 18px;
     flex-direction: row;
     align-items: flex-start;
