@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Github, Star, GitFork, CircleDot, GitPullRequest, BookOpen, Plus, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Github, Star, GitFork, CircleDot, CircleOff, GitPullRequest, GitPullRequestArrow, BookOpen, Plus, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 const CircleOff = AlertCircle;
