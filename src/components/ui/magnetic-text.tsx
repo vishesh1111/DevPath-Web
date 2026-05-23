@@ -19,7 +19,6 @@ export function MagneticText({ text = "CREATIVE", hoverText = "EXPLORE", classNa
     const currentRadius = useRef(0)
     const targetRadius = useRef(0)
     const animationFrameRef = useRef<number>(0)
-    const overlayRectRef = useRef<DOMRect | null>(null)
 
     // Smooth animation loop
     useEffect(() => {
