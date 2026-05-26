@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { leaderboardSyncErrorEmitter } from '@/lib/leaderboard-sync-error';
 
 interface User {
     uid: string;
@@ -90,6 +91,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -98,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
     const SUPER_ADMIN_EMAIL = 'devpathind.community@gmail.com';
+
 
     useEffect(() => {
         // Ensure persistence is set to local
@@ -299,7 +302,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                                 points: increment(pointsDelta),
                                 role: role,
                                 lastActive: today
-                            }, { merge: true }).catch(err => console.error("Error updating leaderboard:", err));
+                            }, { merge: true }).catch(err => {
+                                leaderboardSyncErrorEmitter.emit(err, 'login-streak-sync');
+                            });
                         }
 
                         setDoc(doc(db, collectionName, docId), firestoreUpdate, { merge: true }).catch(err => console.error("Error updating user data:", err));
@@ -444,7 +449,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastActive: today
         }, { merge: true });
 
-        await batch.commit();
+        try {
+            await batch.commit();
+        } catch (error) {
+            leaderboardSyncErrorEmitter.emit(error, 'awardPoints');
+            throw error; // Re-throw so callers know it failed
+        }
 
         setUser(prev => prev ? {
             ...prev,
@@ -478,9 +488,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Use targetUserId directly as it is resolved correctly by client.tsx (Document ID)
             const targetDocId = targetUserId;
 
-            console.log(`[followUser] Target: ${targetCollection}/${targetDocId}`);
-            console.log(`[followUser] Target Role: ${targetRole}, Email: ${targetEmail}, UID: ${targetUserId}`);
-
             const targetUserRef = doc(db, targetCollection, targetDocId);
 
             const updateData: any = {
@@ -504,7 +511,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }, { merge: true });
             }
 
-            await batch.commit();
+            try {
+                await batch.commit();
+            } catch (error) {
+                leaderboardSyncErrorEmitter.emit(error, 'followUser-leaderboard-sync');
+                throw error;
+            }
 
             // Update local state
             setUser(prev => prev ? { ...prev, following: [...(prev.following || []), targetUserId] } : null);
@@ -560,7 +572,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }, { merge: true });
             }
 
-            await batch.commit();
+            try {
+                await batch.commit();
+            } catch (error) {
+                leaderboardSyncErrorEmitter.emit(error, 'unfollowUser-leaderboard-sync');
+                throw error;
+            }
 
             // Update local state
             setUser(prev => prev ? { ...prev, following: (prev.following || []).filter(id => id !== targetUserId) } : null);
@@ -592,9 +609,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             // Sync to Leaderboard
             const leaderboardRef = doc(db, 'leaderboard', user.uid);
-            await setDoc(leaderboardRef, {
-                points: increment(POINTS.FOLLOW_COMMUNITY)
-            }, { merge: true });
+            try {
+                await setDoc(leaderboardRef, {
+                    points: increment(POINTS.FOLLOW_COMMUNITY)
+                }, { merge: true });
+            } catch (syncError) {
+                leaderboardSyncErrorEmitter.emit(syncError, 'followCommunity-leaderboard-sync');
+                // Don't re-throw here since the main points were already awarded
+            }
 
             setUser(prev => prev ? {
                 ...prev,

@@ -13,6 +13,9 @@ import BackgroundMesh from '@/components/layout/BackgroundMesh';
 import PageWrapper from '@/components/layout/PageWrapper';
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { FloatingAssistant } from "@/components/assistant/floating-assistant";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { ToastContainer } from "@/components/ui/ToastContainer";
+import { SyncErrorListener } from "@/components/providers/sync-error-listener";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
@@ -109,30 +112,35 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <script
-             type="application/ld+json"
-             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-          />
-          <AuthProvider>
-            <GamificationProvider>
-              <RealTimeProvider>
-                <AnimatedBackground />
-                {/* <BackgroundMesh /> */}
-                <MaintenanceBanner />
-                <Navbar />
-                
-                {/* YAHAN HUMNE BLOCKER ADD KIYA HAI */}
-                <MaintenanceBlocker>
-                  <PageWrapper>
-                    {children}
-                  </PageWrapper>
-                </MaintenanceBlocker>
-                
-                <FooterWrapper />
-                <FloatingAssistant />
-              </RealTimeProvider>
-            </GamificationProvider>
-          </AuthProvider>
+          <NotificationProvider>
+            <SyncErrorListener>
+              <script
+                 type="application/ld+json"
+                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+              />
+              <AuthProvider>
+                <GamificationProvider>
+                  <RealTimeProvider>
+                    <AnimatedBackground />
+                    {/* <BackgroundMesh /> */}
+                    <MaintenanceBanner />
+                    <Navbar />
+                    
+                    {/* YAHAN HUMNE BLOCKER ADD KIYA HAI */}
+                    <MaintenanceBlocker>
+                      <PageWrapper>
+                        {children}
+                      </PageWrapper>
+                    </MaintenanceBlocker>
+                    
+                    <FooterWrapper />
+                    <FloatingAssistant />
+                    <ToastContainer />
+                  </RealTimeProvider>
+                </GamificationProvider>
+              </AuthProvider>
+            </SyncErrorListener>
+          </NotificationProvider>
         </ThemeProvider>
       </body>
     </html>
