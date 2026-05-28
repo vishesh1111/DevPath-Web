@@ -89,6 +89,10 @@ export default function UserProfile() {
     // Followers/Following Modal State
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [showFollowingModal, setShowFollowingModal] = useState(false);
+    const [followersList, setFollowersList] = useState<any[]>([]);
+    const [followingList, setFollowingList] = useState<any[]>([]);
+    const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
+    const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
     const [modalUsers, setModalUsers] = useState<any[]>([]);
     const [loadingModalUsers, setLoadingModalUsers] = useState(false); 
 
@@ -240,10 +244,8 @@ useEffect(() => {
 
     const fetchModalUsers = async (uids: string[]) => {
         if (!uids || uids.length === 0) {
-            setModalUsers([]);
-            return;
+            return [];
         }
-        setLoadingModalUsers(true);
         try {
             // Fetch users one by one (optimization: use 'in' query for batches of 10 if needed)
             const { getDoc } = await import('firebase/firestore');
@@ -270,22 +272,47 @@ useEffect(() => {
 
                 return null;
             }));
-            setModalUsers(users.filter(u => u !== null));
+            return users.filter(u => u !== null);
         } catch (error) {
             console.error("Error fetching modal users:", error);
-        } finally {
-            setLoadingModalUsers(false);
+            return [];
         }
     };
 
-    const openFollowers = () => {
-        setShowFollowersModal(true);
-        fetchModalUsers(user?.followers || []);
+    const openFollowers = async () => {
+        setIsLoadingFollowers(true);
+        try {
+            const users = await fetchModalUsers(user?.followers || []);
+            setFollowersList(users);
+            setShowFollowersModal(true);
+        } catch (error) {
+            console.error("Failed to load followers:", error);
+        } finally {
+            setIsLoadingFollowers(false);
+        }
     };
 
-    const openFollowing = () => {
-        setShowFollowingModal(true);
-        fetchModalUsers(user?.following || []);
+    const openFollowing = async () => {
+        setIsLoadingFollowing(true);
+        try {
+            const users = await fetchModalUsers(user?.following || []);
+            setFollowingList(users);
+            setShowFollowingModal(true);
+        } catch (error) {
+            console.error("Failed to load following:", error);
+        } finally {
+            setIsLoadingFollowing(false);
+        }
+    };
+
+    const closeFollowersModal = () => {
+        setShowFollowersModal(false);
+        setFollowersList([]);
+    };
+
+    const closeFollowingModal = () => {
+        setShowFollowingModal(false);
+        setFollowingList([]);
     };
 
     if (!user) {
@@ -924,22 +951,73 @@ useEffect(() => {
                 </div>
             )}
 
-            {/* Followers/Following Modal */}
-            {(showFollowersModal || showFollowingModal) && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4">
-                    <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col">
+            {/* Followers Modal */}
+            {showFollowersModal && (
+                <div 
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4"
+                    onClick={closeFollowersModal}
+                >
+                    <div 
+                        className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex justify-between items-center mb-4 border-b border-border pb-4">
-                            <h3 className="text-xl font-bold">{showFollowersModal ? 'Followers' : 'Following'}</h3>
-                            <button onClick={() => { setShowFollowersModal(false); setShowFollowingModal(false); }}><X size={24} /></button>
+                            <h3 className="text-xl font-bold">Followers</h3>
+                            <button onClick={closeFollowersModal}><X size={24} /></button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-4 min-h-[200px]">
-                            {loadingModalUsers ? (
+                            {isLoadingFollowers ? (
                                 <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>
-                            ) : modalUsers.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">No users found.</div>
+                            ) : followersList.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">No followers yet.</div>
                             ) : (
-                                modalUsers.map(u => (
+                                followersList.map(u => (
+                                    <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors">
+                                        <Image
+                                            src={u.photoURL || `https://ui-avatars.com/api/?name=${u.name}&background=random`}
+                                            alt={u.name}
+                                            width={40}
+                                            height={40}
+                                            className="w-10 h-10 rounded-full object-cover"
+                                        />
+                                        <div className="flex-1 overflow-hidden">
+                                            <h4 className="font-bold truncate">{u.name}</h4>
+                                            <p className="text-xs text-muted-foreground truncate">@{u.email?.split('@')[0]}</p>
+                                        </div>
+                                        <a href={`/u?uid=${u.uid}`} className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full hover:bg-primary/20">
+                                            View
+                                        </a>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Following Modal */}
+            {showFollowingModal && (
+                <div 
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4"
+                    onClick={closeFollowingModal}
+                >
+                    <div 
+                        className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center mb-4 border-b border-border pb-4">
+                            <h3 className="text-xl font-bold">Following</h3>
+                            <button onClick={closeFollowingModal}><X size={24} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 min-h-[200px]">
+                            {isLoadingFollowing ? (
+                                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>
+                            ) : followingList.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">Not following anyone yet.</div>
+                            ) : (
+                                followingList.map(u => (
                                     <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors">
                                         <Image
                                             src={u.photoURL || `https://ui-avatars.com/api/?name=${u.name}&background=random`}

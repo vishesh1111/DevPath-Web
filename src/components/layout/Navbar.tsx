@@ -219,7 +219,8 @@ export default function Navbar() {
                                             className={`${styles.mobileLink} ${isMaintenanceMode ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                                             onClick={isMaintenanceMode ? undefined : closeMobileMenu}
                                             aria-current={!isMaintenanceMode && pathname === link.href ? 'page' : undefined}
-                                            aria-disabled={isMaintenanceMode ? 'true' : undefined}
+                                            aria-disabled={isMaintenanceMode}
+                                            tabIndex={isMaintenanceMode ? -1 : 0}
                                         >
                                             {link.label}
                                         </Link>

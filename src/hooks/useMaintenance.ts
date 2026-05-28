@@ -28,7 +28,8 @@ export function useMaintenance() {
                 const cleanedMessage = rawMessage.replace(/^"|"$/g, '');
 
                 // Handle string "true" or boolean true
-                const isActive = modeValue === true || modeValue === "true";
+                const envOverride = process.env.NEXT_PUBLIC_FORCE_MAINTENANCE === 'true';
+                const isActive = envOverride || modeValue === true || modeValue === "true";
 
                 setState({
                     isMaintenanceMode: isActive,
