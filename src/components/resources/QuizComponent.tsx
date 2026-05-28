@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
 import { Trophy, Zap, Target, Lightbulb, CheckCircle2, XCircle } from "lucide-react";
 import styles from "./QuizComponent.module.css";
@@ -32,7 +32,7 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Reset state if quizId changes
   useEffect(() => {
@@ -44,7 +44,9 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
   }, [quizId]);
 
   const handleQuizSubmit = async () => {
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     const current = questions[currentQuestion];
     setShowFeedback(true);
 
@@ -60,10 +62,10 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
       if (currentQuestion + 1 < questions.length) {
         setCurrentQuestion(currentQuestion + 1);
         setSelectedAnswer("");
+        isSubmittingRef.current = false;
       } else {
         // Quiz completed
         setShowResult(true);
-        setIsSubmitting(true);
 
         const isPerfect = updatedScore === questions.length;
         const passed = updatedScore >= Math.ceil(questions.length * 0.7);
@@ -103,7 +105,7 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
         } catch (error) {
           console.error("Failed to update quiz progress:", error);
         } finally {
-          setIsSubmitting(false);
+          isSubmittingRef.current = false;
         }
       }
     }, 1200);
