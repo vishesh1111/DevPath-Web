@@ -2,6 +2,8 @@ import { X, BookOpen, Brain, Terminal, Code, Users, Share2, Check } from 'lucide
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 interface DeveloperMindsetModalProps {
     isOpen: boolean;
@@ -11,18 +13,25 @@ interface DeveloperMindsetModalProps {
 export function DeveloperMindsetModal({ isOpen, onClose }: DeveloperMindsetModalProps) {
     const [mounted, setMounted] = useState(false);
     const [copied, setCopied] = useState(false);
+    const { showSuccess, showError } = useNotification();
 
     useEffect(() => {
         setMounted(true);
         return () => setMounted(false);
     }, []);
 
-    const handleShare = () => {
+    const handleShare = async () => {
         const url = new URL(window.location.href);
         url.searchParams.set('open', 'developer-mindset');
-        navigator.clipboard.writeText(url.toString());
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const copied = await copyToClipboard(url.toString());
+
+        if (copied) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Developer mindset link copied to clipboard.');
+        } else {
+            showError('Copying the link is not supported in this browser.');
+        }
     };
 
     if (!isOpen || !mounted) return null;

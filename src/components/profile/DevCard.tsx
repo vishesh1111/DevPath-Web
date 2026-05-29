@@ -10,8 +10,10 @@ import {
   ChevronRight, Sparkles, Medal,
 } from 'lucide-react';
 import { calculateLevel } from '@/lib/points';
+import { copyToClipboard } from '@/lib/clipboard';
 import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useNotification } from '@/context/NotificationContext';
 import styles from './DevCard.module.css';
 
 // ── Badge registry ────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function DevCard({ user }: { user: any }) {
   const [downloading, setDownloading] = useState(false);
   const [langMounted, setLangMounted] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const { showSuccess, showError } = useNotification();
 
   useEffect(() => {
     const fetch = async () => {
@@ -223,11 +226,15 @@ export default function DevCard({ user }: { user: any }) {
   };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(profileUrl);
+    const copiedSuccessfully = await copyToClipboard(profileUrl);
+
+    if (copiedSuccessfully) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch { /* silent */ }
+      showSuccess('Profile link copied to clipboard.');
+    } else {
+      showError('Copying the profile link is not supported in this browser.');
+    }
   };
 
   // ── Motion variants ───────────────────────────────────────────────────────

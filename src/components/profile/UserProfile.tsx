@@ -23,8 +23,10 @@ import { collection, query, where, orderBy, getDocs, doc, updateDoc, arrayUnion,
 import { db } from '@/lib/firebase';
 import { calculateLevel } from '@/lib/points';
 import { getEmbedUrl } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import { GIT_FALLBACK_STATS } from '@/lib/github';
 import { getSafeSocialUrl, sanitizeSocialLinks } from '@/lib/safe-social-url';
+import { useNotification } from '@/context/NotificationContext';
 
 /**
  * UserProfile component renders the main dashboard profile page for authenticated developers.
@@ -36,6 +38,7 @@ import { getSafeSocialUrl, sanitizeSocialLinks } from '@/lib/safe-social-url';
  */
 export default function UserProfile() {
     const { user, logout, updateUserProfile, awardPoints } = useAuth();
+    const { showSuccess, showError } = useNotification();
     const router = useRouter();
 
     useEffect(() => {
@@ -195,12 +198,18 @@ useEffect(() => {
         await updateUserProfile({ privacySettings: newSettings });
     };
 
-    const handleShareProfile = () => {
+    const handleShareProfile = async () => {
         if (!user) return;
         const url = `${window.location.origin}/u/${user.uid}`;
-        navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const copied = await copyToClipboard(url);
+
+        if (copied) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Profile link copied to clipboard.');
+        } else {
+            showError('Copying the profile link is not supported in this browser.');
+        }
     };
 
     const handleSavePhoto = async () => {

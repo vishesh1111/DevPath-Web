@@ -10,6 +10,8 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 const REACTIONS = [
     { emoji: '👍', label: 'Support', icon: <div className="text-xl">👍</div> },
@@ -22,6 +24,7 @@ const REACTIONS = [
 
 export default function DiscussionViewClient() {
     const { user } = useAuth();
+    const { showSuccess, showError } = useNotification();
     const router = useRouter();
     const searchParams = useSearchParams();
     const discussionId = searchParams.get('id');
@@ -141,11 +144,17 @@ export default function DiscussionViewClient() {
         }
     };
 
-    const handleShare = () => {
+    const handleShare = async () => {
         const url = window.location.href;
-        navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const copiedSuccessfully = await copyToClipboard(url);
+
+        if (copiedSuccessfully) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Discussion link copied to clipboard.');
+        } else {
+            showError('Copying the discussion link is not supported in this browser.');
+        }
     };
 
     if (loading) {

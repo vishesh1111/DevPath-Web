@@ -9,6 +9,8 @@ import { wikiContent } from '@/data/wikiContent';
 import { wikiSearchIndex } from '@/data/wikiSearchIndex';
 import { searchArticles } from '@/utils/wikiSearch';
 import WikiSearchResults from './WikiSearchResults';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 const categories = [
     {
@@ -55,6 +57,7 @@ function slugToLabel(slug: string): string {
 export default function WikiPage() {
     const [activeArticle, setActiveArticle] = useState("intro");
     const [searchQuery, setSearchQuery] = useState(""); 
+    const { showSuccess, showError } = useNotification();
 
     // Add this below your useState declarations
 const allItems = categories.flatMap(c => c.items.map(i => ({ ...i, category: c.title })));
@@ -129,16 +132,18 @@ function highlightMatch(text: string, indices?: readonly [number, number][]) {
 
             button.addEventListener('click', async () => {
                 const codeText = pre.textContent || '';
-                try {
-                    await navigator.clipboard.writeText(codeText);
+                const copiedSuccessfully = await copyToClipboard(codeText);
+
+                if (copiedSuccessfully) {
                     button.innerHTML = 'Copied!';
                     button.className = 'absolute right-3 top-3 px-2 py-1 text-xs font-semibold bg-emerald-600 text-white rounded border border-emerald-500 transition-all duration-200 shadow-md';
+                    showSuccess('Code copied to clipboard.');
                     setTimeout(() => {
                         button.innerHTML = 'Copy';
                         button.className = 'absolute right-3 top-3 px-2 py-1 text-xs font-semibold bg-zinc-900/80 text-zinc-300 rounded border border-white/10 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white transition-all duration-200 shadow-md cursor-pointer backdrop-blur-sm';
                     }, 2000);
-                } catch (err) {
-                    console.error('Failed to copy text: ', err);
+                } else {
+                    showError('Copying code is not supported in this browser.');
                 }
             });
 

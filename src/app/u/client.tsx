@@ -16,6 +16,8 @@ import { useSearchParams, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { GIT_FALLBACK_STATS } from '@/lib/github';
 import { getSafeSocialUrl } from '@/lib/safe-social-url';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 interface PublicUser {
     id?: string;
@@ -83,6 +85,7 @@ interface Project {
 
 function ProfileContent({ uid }: { uid: string }) {
     const { user: currentUser } = useAuth();
+    const { showSuccess, showError } = useNotification();
     const [user, setUser] = useState<PublicUser | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
@@ -301,12 +304,14 @@ function ProfileContent({ uid }: { uid: string }) {
 
     const handleShareProfile = async () => {
         const profileUrl = `${window.location.origin}/u/${uid}`;
-        try {
-            await navigator.clipboard.writeText(profileUrl);
+        const copiedSuccessfully = await copyToClipboard(profileUrl);
+
+        if (copiedSuccessfully) {
             setCopied(true);
             setTimeout(() => setCopied(false), 3000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
+            showSuccess('Profile link copied to clipboard.');
+        } else {
+            showError('Copying the profile link is not supported in this browser.');
         }
     };
 
@@ -343,8 +348,13 @@ function ProfileContent({ uid }: { uid: string }) {
 
     const handleShareProject = (projectId: string) => {
         const url = window.location.href;
-        navigator.clipboard.writeText(url);
-        alert("Profile link copied!");
+        copyToClipboard(url).then((copiedSuccessfully) => {
+            if (copiedSuccessfully) {
+                showSuccess('Project link copied to clipboard.');
+            } else {
+                showError('Copying the project link is not supported in this browser.');
+            }
+        });
     };
 
     // Helper to safely format date
