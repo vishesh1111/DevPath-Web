@@ -229,9 +229,9 @@ useEffect(() => {
         setIsSaving(true);
         try {
             const safeSocialLinks = sanitizeSocialLinks(socialLinks);
-
+            const trimmedAbout = aboutContent.trim();
             await updateUserProfile({
-                aboutMarkdown: aboutContent,
+                aboutMarkdown: trimmedAbout,
                 ...safeSocialLinks
             });
             setSocialLinks(safeSocialLinks);
