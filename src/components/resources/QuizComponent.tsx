@@ -34,14 +34,31 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
   const [showFeedback, setShowFeedback] = useState(false);
   const isSubmittingRef = useRef(false);
 
-  // Reset state if quizId changes
+  // Ref to track the in-flight feedback timer so it can be cancelled on unmount
+  // or when the user switches quizzes mid-delay.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset state if quizId changes and cancel any pending timer
   useEffect(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setCurrentQuestion(0);
     setSelectedAnswer("");
     setScore(0);
     setShowResult(false);
     setShowFeedback(false);
   }, [quizId]);
+
+  // Cancel the timer on component unmount to prevent stale state updates
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const handleQuizSubmit = async () => {
     if (isSubmittingRef.current) return;
@@ -56,7 +73,8 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
       setScore(updatedScore);
     }
 
-    setTimeout(async () => {
+    timerRef.current = setTimeout(async () => {
+      timerRef.current = null;
       setShowFeedback(false);
 
       if (currentQuestion + 1 < questions.length) {
@@ -77,12 +95,12 @@ export default function QuizComponent({ quizId, questions, onComplete, title = "
         try {
           if (user && user.email !== "devpathind.community@gmail.com") {
             const completed = user.completedQuizzes || [];
-            
+
             // Only award XP if not already completed and passed
             if (!completed.includes(quizId) && passed) {
               const newQuizzes = [...completed, quizId];
               const pointsEarned = isPerfect ? 350 : 200;
-               
+
               // Update quiz progress (non-point fields)
               await updateUserProfile({ completedQuizzes: newQuizzes });
 
