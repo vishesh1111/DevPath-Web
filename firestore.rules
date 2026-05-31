@@ -85,9 +85,12 @@ service cloud.firestore {
       }
 
       // Badges Subcollection
+      // Badge grants must come from trusted backend (Cloud Functions / Admin SDK).
+      // Self-writes are intentionally denied to prevent users from awarding
+      // themselves arbitrary badges without meeting the criteria.
       match /badges/{badgeId} {
         allow read: if true;
-        allow write: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId);
+        allow write: if isSuperAdmin();
       }
 
       // GitHub Repos Subcollection
