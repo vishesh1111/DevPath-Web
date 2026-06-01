@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { getFirestore } = require("../config/firebaseAdmin");
+const { getFirestore, withRetry } = require("../config/firebaseAdmin");
 
 const COLLECTION = "assistant_conversations";
 
@@ -9,14 +9,16 @@ const createOrGetConversationRef = async (conversationId) => {
   const db = getFirestore();
   const resolvedConversationId = conversationId || buildConversationId();
   const ref = db.collection(COLLECTION).doc(resolvedConversationId);
-  const snapshot = await ref.get();
+  const snapshot = await withRetry(() => ref.get());
 
   if (!snapshot.exists) {
-    await ref.set({
-      conversationId: resolvedConversationId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    await withRetry(() =>
+      ref.set({
+        conversationId: resolvedConversationId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+    );
   }
 
   return { ref, conversationId: resolvedConversationId };
@@ -51,7 +53,7 @@ const appendMessages = async ({ conversationId, userMessage, assistantReply }) =
     lastMessageAt: now,
   });
 
-  await batch.commit();
+  await withRetry(() => batch.commit());
 
   return { conversationId: resolvedConversationId };
 };
@@ -62,13 +64,15 @@ const getConversationHistory = async (conversationId, maxMessages = 20) => {
   }
 
   const db = getFirestore();
-  const snapshot = await db
-    .collection(COLLECTION)
-    .doc(conversationId)
-    .collection("messages")
-    .orderBy("createdAt", "asc")
-    .limit(maxMessages)
-    .get();
+  const snapshot = await withRetry(() =>
+    db
+      .collection(COLLECTION)
+      .doc(conversationId)
+      .collection("messages")
+      .orderBy("createdAt", "asc")
+      .limit(maxMessages)
+      .get()
+  );
 
   return snapshot.docs.map((doc) => ({
     role: doc.data().role,

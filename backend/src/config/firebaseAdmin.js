@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const path = require("path");
 const fs = require("fs");
+const logger = require("../utils/logger");
 
 let initialized = false;
 
@@ -24,6 +25,8 @@ const resolveServiceAccountPath = (rawPath) => {
   return rawPath;
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const initFirebaseAdmin = () => {
   if (initialized) {
     return admin;
@@ -35,9 +38,20 @@ const initFirebaseAdmin = () => {
   const resolvedServiceAccountPath = resolveServiceAccountPath(serviceAccountPath);
 
   if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(require(resolvedServiceAccountPath)),
-    });
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert(require(resolvedServiceAccountPath)),
+      });
+      logger.info("Firebase Admin SDK initialized successfully");
+    } catch (error) {
+      logger.error({
+        message: "Firebase Admin SDK initialization failed",
+        error: error.message,
+        serviceAccountPath: resolvedServiceAccountPath,
+        stack: error.stack,
+      });
+      throw error;
+    }
   }
 
   initialized = true;
@@ -55,8 +69,33 @@ const getAuth = () => {
   return adminClient.auth();
 };
 
-// Exporting the modules so they can be securely used across backend routes
+const withRetry = async (operation, options = {}) => {
+  const { retries = 3, baseDelay = 1000, maxDelay = 4000 } = options;
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) {
+        throw error;
+      }
+      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+      logger.warn({
+        message: `Firestore operation failed (attempt ${attempt}/${retries}), retrying in ${delay}ms`,
+        error: error.message,
+        code: error.code,
+      });
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+};
+
 module.exports = {
   getFirestore,
   getAuth,
+  withRetry,
 };
