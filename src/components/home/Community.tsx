@@ -2,7 +2,7 @@
 import { MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import logo from '@/assets/logo.png';
+import logo from '@/assets/logo.webp';
 import Button from '../ui/Button';
 import styles from './Community.module.css';
 
@@ -19,13 +19,13 @@ export default function Community() {
                         Connect with developers worldwide, share knowledge, and stay updated with the latest tech trends.
                         Get help when you&apos;re stuck and celebrate your wins together.
                     </p>
-                    <a
+                    <a aria-label="Link" 
                         href="https://chat.whatsapp.com/D2PRfQy4HYgC4XURhY2X8C"
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none' }}
                     >
-                        <Button variant="primary" icon={<MessageCircle size={20} />}>
+                        <Button aria-label="Action button"  variant="primary" icon={<MessageCircle size={20} />}>
                             Join DevPath Community
                         </Button>
                     </a>

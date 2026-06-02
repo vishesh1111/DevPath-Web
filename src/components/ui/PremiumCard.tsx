@@ -48,6 +48,7 @@ export function PremiumCard({ children, className = "", hoverScale = true, bookm
             {/* Bookmark button */}
             {bookmarkItem && (
                 <button
+                    type="button"
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -59,6 +60,7 @@ export function PremiumCard({ children, className = "", hoverScale = true, bookm
                             : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10'
                     }`}
                     title={bookmarked ? "Remove Bookmark" : "Save Bookmark"}
+                    aria-label={bookmarked ? "Remove Bookmark" : "Save Bookmark"}
                 >
                     <Bookmark size={16} fill={bookmarked ? "currentColor" : "none"} />
                 </button>

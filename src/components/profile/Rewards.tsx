@@ -1,18 +1,17 @@
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
-import { CheckCircle, Gift, Lock } from 'lucide-react';
-import { doc, updateDoc, arrayUnion, writeBatch, increment, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { CheckCircle } from 'lucide-react';
+import { doc, updateDoc, writeBatch, increment, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { POINTS } from '@/lib/points';
-import { calculateUserPointsAndBadges } from '@/lib/point-calculation';
+import { determineBadges, getBadgeXp } from '@/lib/point-calculation';
 import { useState, useEffect, useRef } from 'react';
 
 // Global throttle to prevent infinite loops even if component remounts
 let lastBadgeCheckTime = 0;
 
 export default function Rewards({ user: propUser, projectCount = 0 }: { user?: any, projectCount?: number }) {
-    const { user: authUser, updateUserProfile } = useAuth();
+    const { user: authUser } = useAuth();
 
     // Use propUser if provided (public view), otherwise authUser (private view)
     const user = propUser || authUser;
@@ -30,89 +29,80 @@ export default function Rewards({ user: propUser, projectCount = 0 }: { user?: a
         if (Date.now() - lastBadgeCheckTime < 5000) return;
 
         const checkAndSync = async () => {
-            // Check lastBadgeScan from user data (24h throttle)
+            // 24-hour throttle from Firestore field
             const lastScan = user.lastBadgeScan || 0;
             if (Date.now() - lastScan < 24 * 60 * 60 * 1000) {
-                console.log("Point sync skipped (less than 24h since last scan).");
+                console.log('Badge sync skipped — less than 24 h since last scan.');
                 return;
             }
 
-            // Update global throttle
+            // Update in-memory throttle to prevent concurrent runs
             lastBadgeCheckTime = Date.now();
 
             try {
-                // 1. Fetch User Projects (needed for star count)
+                // 1. Fetch the user's projects (needed for builder-badge thresholds)
                 const projectsRef = collection(db, 'members', user.uid, 'projects');
                 const projectsSnap = await getDocs(projectsRef);
-                const userProjects = projectsSnap.docs.map(doc => doc.data());
+                const userProjects = projectsSnap.docs.map(d => d.data());
 
-                // 2. Calculate Expected Points & Badges
-                const result = calculateUserPointsAndBadges(user, userProjects);
+                // 2. Derive the full badge list the user has now earned
+                const earnedBadges = determineBadges(user, userProjects);
+                const currentBadges: string[] = user.achievements || [];
 
-                // 3. Compare with current state
-                const currentPoints = user.points || 0;
-                const currentBadges = user.achievements || [];
+                // 3. Identify ONLY newly unlocked badges — never revoke existing ones
+                const newBadges = earnedBadges.filter(id => !currentBadges.includes(id));
 
-                // Check if update needed (points mismatch OR badges mismatch)
-                const pointsChanged = result.points !== currentPoints;
-                const badgesChanged = JSON.stringify(result.achievements.sort()) !== JSON.stringify(currentBadges.sort());
-
-                if (pointsChanged || badgesChanged) {
-                    console.log("Syncing points/badges...", { old: currentPoints, new: result.points });
+                if (newBadges.length > 0) {
+                    // 4. Calculate XP for new badges only (additive, not a total reset)
+                    const newBadgeXp = newBadges.reduce((sum, id) => sum + getBadgeXp(id), 0);
+                    const updatedAchievements = [...currentBadges, ...newBadges];
 
                     const batch = writeBatch(db);
                     const userRef = doc(db, 'members', user.uid);
-                    const leaderboardRef = doc(db, 'leaderboard', user.uid);
 
-                    // Update Member
+                    // 5. Award badge XP as an increment — transactional points are preserved
                     batch.update(userRef, {
-                        points: result.points,
-                        achievements: result.achievements,
-                        lastBadgeScan: Date.now()
+                        achievements: updatedAchievements,
+                        lastBadgeScan: Date.now(),
+                        ...(newBadgeXp > 0 && { points: increment(newBadgeXp) }),
                     });
 
-                    // Update Leaderboard
-                    batch.set(leaderboardRef, { points: result.points }, { merge: true });
+                    // 6. Mirror XP increment on the leaderboard
+                    if (newBadgeXp > 0) {
+                        const leaderboardRef = doc(db, 'leaderboard', user.uid);
+                        batch.set(leaderboardRef, { points: increment(newBadgeXp) }, { merge: true });
+                    }
 
-                    // Update Badges Subcollection (Add missing ones)
-                    result.achievements.forEach(badgeId => {
-                        if (!currentBadges.includes(badgeId)) {
-                            const badgeRef = doc(db, 'members', user.uid, 'badges', badgeId);
-                            batch.set(badgeRef, {
-                                id: badgeId,
-                                earnedAt: serverTimestamp(),
-                                xpAwarded: POINTS.BADGE_EARNED // Approximate, as we recalc total
-                            });
-                        }
+                    // 7. Write individual badge documents for newly earned badges
+                    newBadges.forEach(badgeId => {
+                        const badgeRef = doc(db, 'members', user.uid, 'badges', badgeId);
+                        batch.set(badgeRef, {
+                            id: badgeId,
+                            earnedAt: serverTimestamp(),
+                            xpAwarded: getBadgeXp(badgeId),
+                        });
                     });
 
                     await batch.commit();
+                    // AuthContext's onSnapshot propagates the update — no second write needed.
 
-                    // Update local state
-                    await updateUserProfile({
-                        points: result.points,
-                        achievements: result.achievements
-                    });
+                    const label = newBadges.length === 1 ? 'badge' : 'badges';
+                    alert(`🎉 You earned ${newBadges.length} new ${label} and ${newBadgeXp} XP!`);
 
-                    if (badgesChanged) {
-                        const newCount = result.achievements.length - currentBadges.length;
-                        if (newCount > 0) alert(`🎉 You earned new badges and your points have been synchronized!`);
-                        else alert(`Your points have been synchronized.`);
-                    }
                 } else {
-                    // Just update timestamp if nothing changed, to reset 24h timer
+                    // No new badges — just refresh the 24-hour scan timestamp
                     await updateDoc(doc(db, 'members', user.uid), {
-                        lastBadgeScan: Date.now()
+                        lastBadgeScan: Date.now(),
                     });
                 }
 
             } catch (error) {
-                console.error("Error syncing points:", error);
+                console.error('Error syncing badges:', error);
             }
         };
 
         checkAndSync();
-    }, [user, isOwner, updateUserProfile]);
+    }, [user, isOwner]);
 
     if (!user) return null;
 
@@ -131,6 +121,7 @@ export default function Rewards({ user: propUser, projectCount = 0 }: { user?: a
         { id: 'face-of-community', name: 'Face of Community', description: 'Uploaded a profile picture.', icon: '😊' },
         { id: 'local-hero', name: 'Local Hero', description: 'Added location details.', icon: '📍' },
         { id: 'streak-7', name: 'Dedicated', description: '7-day login streak.', icon: '🔥' },
+        { id: 'rising-star', name: 'Rising Star', description: 'Got 20+ stars on a project.', icon: '⭐' },
         { id: 'top-collaborator', name: 'Top Collaborator', description: 'Active contributor to community projects.', icon: '🤝' },
     ];
 

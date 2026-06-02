@@ -1,39 +1,180 @@
 "use client";
-
+const DEVPATH_API = process.env.NEXT_PUBLIC_DEVPATH_API_URL ?? 'https://api.devpath.in';
 import { useEffect, useRef } from 'react';
+import { useTheme } from 'next-themes';
 
-interface Particle {
+// Code snippets that type across the screen — dev/community themed
+const CODE_LINES = [
+    // Git
+    'git commit -m "built something great"',
+    'git push origin main',
+    'git checkout -b feature/new-idea',
+    'git merge --no-ff dev',
+    'git rebase -i HEAD~3',
+    'git stash pop',
+    'git log --oneline --graph',
+    'git pull upstream main',
+
+    // JavaScript / TypeScript
+    'const dev = new DevPath();',
+    'import { ambition } from "devpath";',
+    'export default BetterDeveloper;',
+    'type Developer = Community & Code;',
+    'const skills = [...learning, ...building];',
+    'await openSource.push(yourIdea);',
+    'if (curious) { keep.going(); }',
+    'while (alive) { learn(); }',
+    'console.log("you belong here");',
+    'Promise.all([effort, peers]).then(grow);',
+    'const [skills, setSkills] = useState([]);',
+    'useEffect(() => { joinCommunity(); }, []);',
+    'arr.filter(dev => dev.isActive).map(grow);',
+    'Object.keys(ideas).forEach(build);',
+    'async function contribute() {',
+    '  const pr = await fork(repo);',
+    '  return pr.merge();',
+    '}',
+
+    // Python
+    'def grow(developer):',
+    '    return developer.learn() + collaborate()',
+    'import community as c',
+    'skills = [learn() for day in career]',
+    'with open("future.py") as f:',
+    '    f.write(your_code)',
+    'print("keep building")',
+    'class Developer(Community):',
+    '    def __init__(self): self.grow()',
+    'if __name__ == "__main__": start()',
+
+    // Terminal / shell
+    'npm run contribute',
+    'npm install ambition confidence',
+    'yarn add mentorship',
+    'npx create-next-app my-idea',
+    'pip install knowledge',
+    'docker build -t devpath .',
+    'kubectl apply -f community.yaml',
+    'curl -X POST ${DEVPATH_API}/join',
+    'chmod +x ./your_potential.sh',
+    './launch_career.sh --mode=open-source',
+
+    // HTML / CSS
+    '<div class="developer growing">',
+    '<component :is="YourIdea" />',
+    'display: flex; gap: ambitious;',
+    '@keyframes grow { to { level: max } }',
+    'grid-template: "learn build ship" / 1fr;',
+
+    // Comments
+    '// 500+ developers and counting',
+    '// TODO: ship something today',
+    '/* built with community */',
+    '# open source changes everything',
+    '// never stop shipping',
+    '/* you belong in tech */',
+    '// debug, deploy, repeat',
+    '# the best time to start was yesterday',
+
+    // Misc dev
+    'O(1) lookup, O(n) friendships',
+    'SELECT * FROM opportunities;',
+    'JOIN community ON passion = tech;',
+    'fn main() { devpath::join(); }',
+    'go func() { contribute() }()',
+    'std::cout << "keep going" << endl;',
+];
+
+// Logo path: small DevPath "D" approximated as arc + vertical bar using canvas
+function drawSpinningLogo(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    angle: number,
+    color: string,
+    alpha: number
+) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    // Outer spinning ring
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Inner "D" letterform
+    const s = radius * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.35, -s);
+    ctx.lineTo(-s * 0.35, s);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.35, -s);
+    ctx.bezierCurveTo(s * 1.1, -s, s * 1.1, s, -s * 0.35, s);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Small dot on ring (like an orbit indicator)
+    ctx.beginPath();
+    ctx.arc(radius, 0, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+interface TypeLine {
+    text: string;
     x: number;
     y: number;
-    vx: number;
-    vy: number;
-    size: number;
-    symbol: string;
+    charIndex: number;
     opacity: number;
+    speed: number;
+    fadeOut: boolean;
+    size: number;
 }
 
 export default function InteractiveBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const mouseRef = useRef({ x: 0, y: 0 });
-    const isMouseMoving = useRef(false);
-    const mouseTimeout = useRef<NodeJS.Timeout | null>(null);
+    const { resolvedTheme } = useTheme();
+    const themeRef = useRef(resolvedTheme);
+
+    useEffect(() => {
+        themeRef.current = resolvedTheme;
+    }, [resolvedTheme]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
         let animationFrameId: number;
-        let particles: Particle[] = [];
+        let lines: TypeLine[] = [];
+        let logoAngle = 0;
+        let frame = 0;
 
-        // More visible, "hacker" style symbols
-        const symbols = [
-            '{ }', '< />', '=>', '&&', '||', '[]', '()', '*', ';',
-            'func', 'const', 'let', 'var', 'await', 'import', 'export',
-            '0', '1', 'if', 'else', 'return'
+        // Logo instances — scattered, slow spin, very subtle
+        const logos = [
+            { cx: 0.06, cy: 0.15, radius: 28, speed: 0.004 },
+            { cx: 0.18, cy: 0.55, radius: 22, speed: -0.003 },
+            { cx: 0.08, cy: 0.85, radius: 18, speed: 0.005 },
+            { cx: 0.92, cy: 0.20, radius: 24, speed: -0.004 },
+            { cx: 0.82, cy: 0.60, radius: 20, speed: 0.003 },
+            { cx: 0.94, cy: 0.88, radius: 16, speed: -0.005 },
         ];
+        const logoAngles = logos.map(l => Math.random() * Math.PI * 2);
 
         const resizeCanvas = () => {
             const dpr = window.devicePixelRatio || 1;
@@ -44,131 +185,137 @@ export default function InteractiveBackground() {
             canvas.style.height = `${window.innerHeight}px`;
         };
 
-        const createParticles = () => {
-            // Reduce density: divide by 15000 instead of 10000
-            const density = 15000;
-            const calculatedCount = Math.floor((window.innerWidth * window.innerHeight) / density);
-            // Cap at 100 particles max to ensure performance
-            const particleCount = Math.min(calculatedCount, 100);
+        const spawnLine = () => {
+    const isMobile = window.innerWidth < 768;
+    const size = isMobile
+        ? Math.random() * 8 + 9
+        : Math.random() * 9 + 10;
 
-            particles = [];
+    const side = Math.random() < 0.5 ? 'left' : 'right';
 
-            for (let i = 0; i < particleCount; i++) {
-                particles.push({
-                    x: Math.random() * window.innerWidth,
-                    y: Math.random() * window.innerHeight,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    size: Math.random() * 14 + 10,
-                    symbol: symbols[Math.floor(Math.random() * symbols.length)],
-                    opacity: Math.random() * 0.5 + 0.2
-                });
-            }
-        };
+    // Left strip: 0% to 22% of screen width
+    // Right strip: 72% to 94% of screen width
+    // This clears the entire centre where hero content sits
+    let x: number;
+    if (side === 'left') {
+        x = Math.random() * window.innerWidth * 0.22;
+    } else {
+        x = window.innerWidth * 0.72 + Math.random() * (window.innerWidth * 0.22);
+    }
+
+    // Also avoid the vertical middle band on mobile where content stacks taller
+    const y = isMobile
+        ? Math.random() * window.innerHeight * 0.35 + (Math.random() < 0.5 ? 0 : window.innerHeight * 0.65)
+        : Math.random() * window.innerHeight;
+
+    lines.push({
+        text: CODE_LINES[Math.floor(Math.random() * CODE_LINES.length)],
+        x,
+        y,
+        charIndex: 0,
+        opacity: 0,
+        speed: Math.random() * 0.6 + 0.3,
+        fadeOut: false,
+        size,
+    });
+};
+
+        // Seed initial lines staggered
+        for (let i = 0; i < 14; i++) spawnLine();
+
+        let charAccumulator: number[] = [];
 
         const draw = () => {
-            if (!ctx || !canvas) return;
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            const isDark = themeRef.current === 'dark';
+            const codeColor = isDark
+                ? 'rgba(0, 212, 255, 1)'      // cyan in dark
+                : 'rgba(14, 116, 144, 1)';    // teal-700 in light
+            const logoColor = isDark
+                ? 'rgba(0, 212, 255, 1)'
+                : 'rgba(14, 165, 233, 1)';    // sky-500 in light
 
-            particles.forEach((p, i) => {
-                // Update position
-                p.x += p.vx;
-                p.y += p.vy;
+            frame++;
 
-                // Very low friction so they keep moving
-                p.vx *= 0.995;
-                p.vy *= 0.995;
+            // Spawn a new line every ~120 frames
+            if (frame % 90 === 0 && lines.length < 22) spawnLine();
+            // Draw code lines
+            lines.forEach((line, idx) => {
+                if (charAccumulator[idx] === undefined) charAccumulator[idx] = 0;
 
-                // Boost speed if too slow to ensure constant movement
-                if (Math.abs(p.vx) < 0.2) p.vx += (Math.random() - 0.5) * 0.02;
-                if (Math.abs(p.vy) < 0.2) p.vy += (Math.random() - 0.5) * 0.02;
+                // Fade in
+                if (!line.fadeOut && line.opacity < 0.55) line.opacity = Math.min(line.opacity + 0.015, 0.55);
 
-                // Mouse interaction
-                const dx = mouseRef.current.x - p.x;
-                const dy = mouseRef.current.y - p.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const maxDist = 400;
-
-                if (distance < maxDist) {
-                    const force = (maxDist - distance) / maxDist;
-                    const angle = Math.atan2(dy, dx);
-
-                    // Push away
-                    p.vx -= Math.cos(angle) * force * 0.05;
-                    p.vy -= Math.sin(angle) * force * 0.05;
-
-                    // Brighten
-                    ctx.globalAlpha = Math.min(p.opacity + force * 0.8, 1);
-                } else {
-                    ctx.globalAlpha = p.opacity;
+                // Advance characters
+                charAccumulator[idx] += line.speed;
+                if (charAccumulator[idx] >= 1) {
+                    const steps = Math.floor(charAccumulator[idx]);
+                    line.charIndex = Math.min(line.charIndex + steps, line.text.length);
+                    charAccumulator[idx] -= steps;
                 }
 
-                // Wrap edges
-                if (p.x < -50) p.x = window.innerWidth + 50;
-                if (p.x > window.innerWidth + 50) p.x = -50;
-                if (p.y < -50) p.y = window.innerHeight + 50;
-                if (p.y > window.innerHeight + 50) p.y = -50;
-
-                // Draw Symbol
-                ctx.font = `bold ${p.size}px monospace`;
-                ctx.fillStyle = '#60A5FA';
-                ctx.fillText(p.symbol, p.x, p.y);
-
-                // Draw Connections
-                for (let j = i + 1; j < particles.length; j++) {
-                    const p2 = particles[j];
-                    const dx2 = p.x - p2.x;
-                    const dy2 = p.y - p2.y;
-                    const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-
-                    if (dist2 < 120) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = `rgba(96, 165, 250, ${0.2 * (1 - dist2 / 120)})`;
-                        ctx.lineWidth = 1;
-                        ctx.moveTo(p.x, p.y);
-                        ctx.lineTo(p2.x, p2.y);
-                        ctx.stroke();
+                // Once fully typed, wait then fade out
+                if (line.charIndex >= line.text.length) {
+                    if (!line.fadeOut) {
+                        // hold for ~2 seconds then start fading
+                        if (!('holdTimer' in line)) (line as any).holdTimer = frame;
+                        if (frame - (line as any).holdTimer > 120) line.fadeOut = true;
                     }
                 }
+
+                if (line.fadeOut) {
+                    line.opacity = Math.max(line.opacity - 0.008, 0);
+                }
+
+                if (line.opacity <= 0 && line.fadeOut) return; // skip draw, will be removed below
+
+                ctx.save();
+                ctx.globalAlpha = line.opacity;
+                ctx.font = `${line.size}px "Fira Code", "Cascadia Code", monospace`;
+                ctx.fillStyle = codeColor;
+                ctx.fillText(line.text.slice(0, line.charIndex), line.x, line.y);
+                // Blinking cursor
+                if (!line.fadeOut && line.charIndex < line.text.length) {
+                    const measured = ctx.measureText(line.text.slice(0, line.charIndex));
+                    ctx.fillStyle = codeColor;
+                    ctx.globalAlpha = Math.sin(frame * 0.15) > 0 ? line.opacity : 0;
+                    ctx.fillText('|', line.x + measured.width + 1, line.y);
+                }
+                ctx.restore();
+            });
+
+            // Remove dead lines and reseed
+            const before = lines.length;
+            lines = lines.filter(l => !(l.fadeOut && l.opacity <= 0));
+            charAccumulator = charAccumulator.slice(0, lines.length);
+            if (lines.length < before) {
+                // Replace removed lines
+                for (let i = lines.length; i < before; i++) spawnLine();
+            }
+
+            // Draw spinning logos
+            logos.forEach((logo, i) => {
+                logoAngles[i] += logo.speed;
+                const cx = logo.cx * window.innerWidth;
+                const cy = logo.cy * window.innerHeight;
+                drawSpinningLogo(ctx, cx, cy, logo.radius, logoAngles[i], logoColor, isDark ? 0.18 : 0.14);
             });
 
             animationFrameId = requestAnimationFrame(draw);
         };
 
-        const handleMouseMove = (e: MouseEvent) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseRef.current = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-            isMouseMoving.current = true;
-
-            if (mouseTimeout.current) clearTimeout(mouseTimeout.current);
-            mouseTimeout.current = setTimeout(() => {
-                isMouseMoving.current = false;
-            }, 100);
-        };
-
         const handleResize = () => {
             resizeCanvas();
-            createParticles();
         };
 
         window.addEventListener('resize', handleResize);
-        window.addEventListener('mousemove', handleMouseMove);
-
         resizeCanvas();
-        createParticles();
         draw();
 
         return () => {
             window.removeEventListener('resize', handleResize);
-            window.removeEventListener('mousemove', handleMouseMove);
             cancelAnimationFrame(animationFrameId);
-            if (mouseTimeout.current) clearTimeout(mouseTimeout.current);
         };
     }, []);
 
@@ -176,7 +323,7 @@ export default function InteractiveBackground() {
         <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none z-0"
-            style={{ opacity: 0.8 }}
+            style={{ opacity: 1 }}
         />
     );
 }

@@ -2,6 +2,8 @@ import { X, BookOpen, Brain, Terminal, Code, Users, Share2, Check } from 'lucide
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 interface DeveloperMindsetModalProps {
     isOpen: boolean;
@@ -11,31 +13,42 @@ interface DeveloperMindsetModalProps {
 export function DeveloperMindsetModal({ isOpen, onClose }: DeveloperMindsetModalProps) {
     const [mounted, setMounted] = useState(false);
     const [copied, setCopied] = useState(false);
+    const { showSuccess, showError } = useNotification();
 
     useEffect(() => {
         setMounted(true);
         return () => setMounted(false);
     }, []);
 
-    const handleShare = () => {
+    const handleShare = async () => {
         const url = new URL(window.location.href);
         url.searchParams.set('open', 'developer-mindset');
-        navigator.clipboard.writeText(url.toString());
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const copied = await copyToClipboard(url.toString());
+
+        if (copied) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Developer mindset link copied to clipboard.');
+        } else {
+            showError('Copying the link is not supported in this browser.');
+        }
     };
 
     if (!isOpen || !mounted) return null;
 
     return createPortal(
         <AnimatePresence>
-            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-card w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border shadow-2xl custom-scrollbar"
-                >
+            <div 
+             className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+             onClick={onClose}
+            >
+               <motion.div
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.95 }}
+               onClick={e => e.stopPropagation()}
+               className="bg-card w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border shadow-2xl custom-scrollbar"
+               >
                     {/* Header */}
                     <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-border bg-card/95 backdrop-blur">
                         <div>
@@ -55,7 +68,7 @@ export function DeveloperMindsetModal({ isOpen, onClose }: DeveloperMindsetModal
                                     {copied ? "Link Copied!" : "Share Link"}
                                 </span>
                             </button>
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={onClose}
                                 className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground"
                             >

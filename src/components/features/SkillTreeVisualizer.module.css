@@ -1,0 +1,142 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #0f1115; /* Obsidian dark */
+  padding: 2rem;
+  border-radius: 12px;
+  min-height: 600px;
+  position: relative;
+  overflow: hidden;
+}
+
+.controls {
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.pathBtn {
+  background: #1f2229;
+  border: 1px solid #333;
+  color: #8b949e;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pathBtn.active {
+  background: #238636;
+  color: white;
+  border-color: #2ea043;
+  box-shadow: 0 0 15px rgba(46, 160, 67, 0.4);
+}
+
+.treeArea {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 500px;
+  display: flex;
+  justify-content: center;
+}
+
+.svgLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.line {
+  stroke: #30363d;
+  stroke-width: 3;
+  fill: none;
+  transition: stroke 0.3s ease;
+}
+
+.line.active {
+  stroke: #2ea043;
+  filter: drop-shadow(0 0 5px #2ea043);
+  animation: dash 1.5s linear infinite;
+  stroke-dasharray: 10;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: #161b22;
+  border: 2px solid #30363d;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #c9d1d9;
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.node:hover {
+  border-color: #58a6ff;
+  box-shadow: 0 0 20px rgba(88, 166, 255, 0.5);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.node.completed {
+  border-color: #2ea043;
+  color: #2ea043;
+}
+
+.drawer {
+  position: absolute;
+  right: -400px;
+  top: 0;
+  width: 350px;
+  height: 100%;
+  background: #161b22;
+  border-left: 1px solid #30363d;
+  padding: 2rem;
+  transition: right 0.3s ease;
+  z-index: 10;
+  box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+}
+
+.drawer.open {
+  right: 0;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 1.2rem;
+  float: right;
+}
+
+.drawerTitle {
+  color: #58a6ff;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.drawerDesc {
+  color: #8b949e;
+  line-height: 1.6;
+}

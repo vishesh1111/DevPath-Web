@@ -20,8 +20,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 
 const POINTS = {
     DAILY_LOGIN: 0,
@@ -40,6 +40,10 @@ const POINTS = {
 const SOCIAL_BADGES = ['social-github', 'social-linkedin', 'social-instagram'];
 
 async function fullRecalc() {
+    if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD) {
+        console.error("Error: SUPER_ADMIN_EMAIL or SUPER_ADMIN_PASSWORD environment variables are not configured.");
+        return;
+    }
     console.log("Starting Full Recalculation (Reset & Recount)...");
     try {
         await signInWithEmailAndPassword(auth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD);
@@ -47,7 +51,7 @@ async function fullRecalc() {
 
         const membersRef = collection(db, 'members');
         const snapshot = await getDocs(membersRef);
-        const batch = writeBatch(db);
+        let batch = writeBatch(db);
         let count = 0;
 
         console.log(`Found ${snapshot.size} members.`);
@@ -139,6 +143,7 @@ async function fullRecalc() {
             if (count % 400 === 0) {
                 await batch.commit();
                 console.log("Batch committed.");
+                batch = writeBatch(db);
             }
         }
 

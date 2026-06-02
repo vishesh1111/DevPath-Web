@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {writeBatch, doc, collection, serverTimestamp, increment } from 'firebase/firestore';
+import { POINTS } from '@/lib/points';
 
 interface CreateDiscussionModalProps {
     isOpen: boolean;
@@ -27,8 +28,11 @@ export default function CreateDiscussionModal({ isOpen, onClose, userId, userNam
 
         try {
             const tagsArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-
-            await addDoc(collection(db, 'discussions'), {
+            const batch = writeBatch(db);
+            
+            const discussionRef = doc(collection(db, 'discussions'));
+            const memberRef = doc(db, 'members', userId);
+            batch.set(discussionRef,{
                 authorId: userId,
                 authorName: userName,
                 title,
@@ -37,13 +41,16 @@ export default function CreateDiscussionModal({ isOpen, onClose, userId, userNam
                 likes: [],
                 replyCount: 0,
                 createdAt: serverTimestamp()
-            });
-
-            onSuccess();
-            onClose();
+                });
+                batch.update(memberRef, {
+                    points: increment(POINTS.CREATE_DISCUSSION)
+                });
+            await batch.commit();
             setTitle('');
             setContent('');
             setTags('');
+            onSuccess();
+            onClose();
         } catch (error) {
             console.error("Error creating discussion:", error);
             alert("Failed to create discussion. Please try again.");
@@ -57,7 +64,7 @@ export default function CreateDiscussionModal({ isOpen, onClose, userId, userNam
             <div className="bg-card w-full max-w-2xl rounded-xl border border-border shadow-xl animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center p-6 border-b border-border">
                     <h2 className="text-xl font-bold">Start a Discussion</h2>
-                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <button aria-label="Action button"  onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <X size={24} />
                     </button>
                 </div>
@@ -98,14 +105,14 @@ export default function CreateDiscussionModal({ isOpen, onClose, userId, userNam
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4">
-                        <button
+                        <button aria-label="Action button" 
                             type="button"
                             onClick={onClose}
                             className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
                             Cancel
                         </button>
-                        <button
+                        <button aria-label="Action button" 
                             type="submit"
                             disabled={loading}
                             className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

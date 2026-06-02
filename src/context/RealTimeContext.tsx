@@ -1,5 +1,5 @@
 "use client";
-
+const AVATAR_API = process.env.NEXT_PUBLIC_AVATAR_API_URL ?? 'https://api.dicebear.com/7.x/avataaars/svg';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface Activity {
@@ -53,7 +53,7 @@ export function RealTimeProvider({ children }: { children: React.ReactNode }) {
                 action: randomAction.action,
                 target: randomAction.target,
                 time: "Just now",
-                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${randomUser}`
+                avatar: `${AVATAR_API}?seed=${randomUser}`
             };
 
             setActivities(prev => [newActivity, ...prev].slice(0, 5));

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Github, LogIn, Menu, X, LogOut, Lock, Bookmark } from 'lucide-react';
-import logo from '@/assets/logo.png';
+import logo from '@/assets/logo.webp';
 import { useAuth } from '@/context/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -61,10 +61,10 @@ export default function Navbar() {
                 className={styles.navbarContainer}
                 style={{ top: isMaintenanceMode ? '70px' : '20px' }}
             >
-                <nav className={styles.navbar} style={{ pointerEvents: isMaintenanceMode ? 'none' : 'auto' }}>
-                    <Link href="/" className={styles.logo}>
+                <nav className={styles.navbar} style={{ pointerEvents: isMaintenanceMode ? 'none' : 'auto' }} aria-label="Main navigation">
+                    <Link href="/" className={styles.logo} aria-label="DevPath home">
                         <div className={styles.logoIcon}>
-                            <Image src={logo} alt="DevPath Logo" width={32} height={32} className="rounded-full" />
+                            <Image src={logo} alt="DevPath Logo" width={32} height={32} className="rounded-full" aria-hidden="true" />
                         </div>
                         <span className={styles.logoText}>DevPath</span>
                     </Link>
@@ -76,11 +76,16 @@ export default function Navbar() {
                                 isMaintenanceMode ? (
                                     <span
                                         key={link.href}
+                                        role="link"
+                                        aria-disabled="true"
+                                        tabIndex={0}
                                         className={`${styles.navLink} text-muted-foreground cursor-not-allowed opacity-50 ${link.label === 'Courses' ? 'text-xs' : ''}`}
                                         style={{ fontSize: link.label === 'Courses' ? '0.75rem' : undefined }}
                                         title="Maintenance Mode Active"
+                                        aria-label={`${link.label} (unavailable – maintenance mode)`}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }}
                                     >
-                                        {link.label === 'Community' && <Lock size={12} className="inline mr-1" />}
+                                        {link.label === 'Community' && <Lock size={12} className="inline mr-1" aria-hidden="true" />}
                                         {link.label}
                                     </span>
                                 ) : (
@@ -89,6 +94,7 @@ export default function Navbar() {
                                         href={link.href}
                                         className={`${styles.navLink} ${link.label === 'Courses' ? 'text-xs' : ''}`}
                                         style={{ fontSize: link.label === 'Courses' ? '0.75rem' : undefined }}
+                                        aria-current={pathname === link.href ? 'page' : undefined}
                                     >
                                         {link.label}
                                     </Link>
@@ -106,13 +112,18 @@ export default function Navbar() {
 
                     <div className={styles.actions}>
                         {user && (
-                            <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-500/10 text-orange-500 rounded-full border border-orange-500/20" title="Current Streak">
-                                <Flame size={16} fill="currentColor" />
-                                <span className="text-sm font-bold">{currentStreak}</span>
+                            <div
+                                className="flex items-center gap-1 px-3 py-1.5 bg-orange-500/10 text-orange-500 rounded-full border border-orange-500/20"
+                                title={`Current streak: ${currentStreak} days`}
+                                aria-label={`Current streak: ${currentStreak} days`}
+                            >
+                                <Flame size={16} fill="currentColor" aria-hidden="true" />
+                                <span className="text-sm font-bold" aria-hidden="true">{currentStreak}</span>
                             </div>
                         )}
                         <ThemeToggle />
                         <button
+                            type="button"
                             onClick={() => setBookmarkDrawerOpen(true)}
                             className={styles.iconButton}
                             aria-label="Open Saved Bookmarks"
@@ -163,10 +174,12 @@ export default function Navbar() {
                         <button
                             className={styles.hamburger}
                             onClick={toggleMobileMenu}
-                            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
                             aria-expanded={mobileMenuOpen}
+                            aria-controls="mobile-nav-drawer"
+                            aria-haspopup="dialog"
                         >
-                            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                            {mobileMenuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
                         </button>
                     </div>
                 </nav >
@@ -188,30 +201,37 @@ export default function Navbar() {
 
                             {/* Drawer */}
                             <motion.div
+                                id="mobile-nav-drawer"
                                 className={styles.mobileMenu}
                                 initial={{ x: '100%' }}
                                 animate={{ x: 0 }}
                                 exit={{ x: '100%' }}
                                 transition={{ type: 'tween', duration: 0.3 }}
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Navigation menu"
                             >
                                 <div className={styles.mobileHeader}>
-                                    <span className={styles.mobileTitle}>Menu</span>
+                                    <span className={styles.mobileTitle} id="mobile-nav-title">Menu</span>
                                     <button
                                         className={styles.mobileClose}
                                         onClick={closeMobileMenu}
-                                        aria-label="Close menu"
+                                        aria-label="Close navigation menu"
                                     >
-                                        <X size={24} />
+                                        <X size={24} aria-hidden="true" />
                                     </button>
                                 </div>
 
-                                <nav className={styles.mobileNav}>
+                                <nav className={styles.mobileNav} aria-label="Mobile navigation">
                                     {navLinks.map((link) => (
                                         <Link
                                             key={link.href}
                                             href={isMaintenanceMode ? "#" : link.href}
                                             className={`${styles.mobileLink} ${isMaintenanceMode ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                                             onClick={isMaintenanceMode ? undefined : closeMobileMenu}
+                                            aria-current={!isMaintenanceMode && pathname === link.href ? 'page' : undefined}
+                                            aria-disabled={isMaintenanceMode}
+                                            tabIndex={isMaintenanceMode ? -1 : 0}
                                         >
                                             {link.label}
                                         </Link>
@@ -244,7 +264,7 @@ export default function Navbar() {
                                         </Link>
                                     )}
                                     {user && (
-                                        <button
+                                        <button aria-label="Action button" 
                                             className={styles.mobileProfileButton}
                                             onClick={() => {
                                                 logout();

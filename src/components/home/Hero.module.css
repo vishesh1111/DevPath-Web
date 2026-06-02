@@ -7,9 +7,69 @@
     padding: 120px 24px 80px;
     position: relative;
     overflow: hidden;
-    background: radial-gradient(circle at 50% 0%, var(--bg-secondary) 0%, var(--bg-primary) 60%);
+    background: transparent;
 }
 
+/* ─── Animated background layer ─── */
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+
+    /* Light mode: clean white-to-slate with a cyan bloom at top */
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 255, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(157, 78, 221, 0.08) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 30% at 10% 60%, rgba(0, 255, 136, 0.06) 0%, transparent 50%),
+        linear-gradient(180deg, #f0f9ff 0%, #f8fafc 50%, #f0f4ff 100%);
+
+    animation: shiftLight 12s ease-in-out infinite alternate;
+}
+
+/* Dark mode background override */
+:global(.dark) .hero::before {
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 255, 0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(157, 78, 221, 0.12) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 30% at 10% 60%, rgba(0, 255, 136, 0.08) 0%, transparent 50%),
+        linear-gradient(180deg, #050714 0%, #0a0e1a 50%, #080b1e 100%);
+
+    animation: shiftDark 12s ease-in-out infinite alternate;
+}
+
+/* Subtle floating grid overlay */
+.hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image:
+        linear-gradient(rgba(0, 212, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 100%);
+    pointer-events: none;
+}
+
+:global(.dark) .hero::after {
+    background-image:
+        linear-gradient(rgba(0, 212, 255, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.06) 1px, transparent 1px);
+}
+
+@keyframes shiftLight {
+    0%   { background-position: 50% 0%, 80% 80%, 10% 60%, center; filter: brightness(1); }
+    100% { background-position: 55% 5%, 75% 85%, 15% 55%, center; filter: brightness(1.02); }
+}
+
+@keyframes shiftDark {
+    0%   { filter: brightness(1); }
+    100% { filter: brightness(1.08); }
+}
+
+/* ─── Content ─── */
 .content {
     text-align: center;
     max-width: 900px;
@@ -17,14 +77,53 @@
     margin-bottom: 60px;
 }
 
+/* ─── Title — fixed visibility in both modes ─── */
+.title {
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+    text-shadow:
+        0 0 40px rgba(255, 255, 255, 0.9),
+        0 0 80px rgba(255, 255, 255, 0.7),
+        0 2px 4px rgba(255, 255, 255, 0.95);
+    animation: fadeUp 0.8s ease-out backwards;
+}
+
+:global(.dark) .title {
+    color: #ffffff;
+    text-shadow:
+        0 0 40px rgba(0, 0, 0, 0.95),
+        0 0 80px rgba(0, 0, 0, 0.8),
+        0 2px 8px rgba(0, 0, 0, 0.99);
+}
 .subtitle {
     font-size: 20px;
-    color: var(--text-secondary);
     line-height: 1.6;
     max-width: 600px;
     margin: 0 auto 40px;
     animation: fadeUp 0.8s ease-out 0.2s backwards;
+    color: #1e293b;
+    text-shadow:
+        0 0 30px rgba(255, 255, 255, 0.95),
+        0 0 60px rgba(255, 255, 255, 0.8);
 }
+
+:global(.dark) .subtitle {
+    color: #e2e8f0;
+    text-shadow:
+        0 0 30px rgba(0, 0, 0, 0.99),
+        0 0 60px rgba(0, 0, 0, 0.9);
+}
+
+.statsItem {
+    animation: fadeUp 0.8s ease-out backwards;
+}
+
+.statsItem:nth-child(1) { animation-delay: 0.2s; }
+.statsItem:nth-child(2) { animation-delay: 0.4s; }
+.statsItem:nth-child(3) { animation-delay: 0.6s; }
 
 .ctas {
     display: flex;
@@ -33,29 +132,33 @@
     animation: fadeUp 0.8s ease-out 0.4s backwards;
 }
 
-/* Decorative Background Elements */
+/* ─── Glow accent (kept from original) ─── */
 .glow {
     position: absolute;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.12) 0%, transparent 70%);
     border-radius: 50%;
     top: -100px;
     left: 50%;
     transform: translateX(-50%);
     pointer-events: none;
+    z-index: 1;
+    animation: pulse 8s ease-in-out infinite;
+}
+
+:global(.dark) .glow {
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.18) 0%, transparent 70%);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+    50%       { opacity: 1;   transform: translateX(-50%) scale(1.08); }
 }
 
 @keyframes fadeUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 768px) {

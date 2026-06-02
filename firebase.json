@@ -10,11 +10,22 @@
     "rewrites": [
       {
         "source": "/u/**",
-        "destination": "/u/public.html"
+        "destination": "/u/index.html"
       },
       {
         "source": "**",
         "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Powered-By",
+            "value": ""
+          }
+        ]
       }
     ]
   },

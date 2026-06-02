@@ -1,22 +1,131 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Github, GitMerge, Globe, BookOpen, Code2, Users, ExternalLink, Star, Link as LinkIcon, Check, LayoutDashboard } from 'lucide-react';
+import { Github, GitMerge, Globe, BookOpen, Code2, Users, ExternalLink, Star, Check, LayoutDashboard, Clock, GitFork } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { GithubAuthProvider, linkWithPopup } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
 import GitHubDashboard from '@/components/opensource/GitHubDashboard';
+import { siteConfig } from '@/config/siteConfig';
+
+type FeaturedRepoStats = {
+    stars: number;
+    forks: number;
+    openIssues: number;
+};
+
+type FeaturedRepoStatsEntry = readonly [string, FeaturedRepoStats];
+
+type GitHubRepoApiResponse = {
+    stargazers_count?: number;
+    forks_count?: number;
+    open_issues_count?: number;
+};
+
+type GitHubProfile = {
+    login: string;
+    avatar_url?: string;
+    public_repos?: number;
+    followers?: number;
+    following?: number;
+    bio?: string | null;
+    company?: string | null;
+    location?: string | null;
+    created_at?: string;
+};
+
+type GitHubRepo = {
+    id: number | string;
+    stargazers_count?: number;
+    language?: string | null;
+};
+
+type GitHubActivityEvent = {
+    id: string;
+    type: string;
+    repo: {
+        name: string;
+    };
+    created_at: string;
+};
+
+const getGitHubRepoSlug = (url: string | null) => {
+    if (!url) return null;
+
+    try {
+        const { hostname, pathname } = new URL(url);
+        if (hostname !== 'github.com') return null;
+
+        const [owner, repo] = pathname.replace(/^\/|\/$/g, '').split('/');
+        return owner && repo ? `${owner}/${repo}` : null;
+    } catch {
+        return null;
+    }
+};
+
+const isFeaturedRepoStatsEntry = (
+    entry: FeaturedRepoStatsEntry | null
+): entry is FeaturedRepoStatsEntry => entry !== null;
 
 export default function OpenSourcePage() {
     const { user, updateUserProfile } = useAuth();
     const [connecting, setConnecting] = useState(false);
     const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [repoStats, setRepoStats] = useState<Record<string, FeaturedRepoStats>>({});
+    const [statsLoading, setStatsLoading] = useState(false);
 
     useEffect(() => {
         const storedToken = localStorage.getItem('github_access_token');
         if (storedToken) setAccessToken(storedToken);
+    }, []);
+
+    useEffect(() => {
+        const publicRepos = siteConfig.featuredRepos.filter(repo => repo.isPublic && getGitHubRepoSlug(repo.url));
+        if (publicRepos.length === 0) return;
+
+        let cancelled = false;
+
+        const fetchFeaturedRepoStats = async () => {
+            setStatsLoading(true);
+            const statsEntries = await Promise.all(
+                publicRepos.map(async (repo) => {
+                    const slug = getGitHubRepoSlug(repo.url);
+                    if (!slug) return null;
+
+                    try {
+                        const response = await fetch(`https://api.github.com/repos/${slug}`, {
+                            headers: { Accept: 'application/vnd.github+json' }
+                        });
+
+                        if (!response.ok) return null;
+
+                        const data = await response.json() as GitHubRepoApiResponse;
+                        return [
+                            repo.name,
+                            {
+                                stars: data.stargazers_count || 0,
+                                forks: data.forks_count || 0,
+                                openIssues: data.open_issues_count || 0
+                            }
+                        ] as FeaturedRepoStatsEntry;
+                    } catch {
+                        return null;
+                    }
+                })
+            );
+
+            if (!cancelled) {
+                setRepoStats(Object.fromEntries(statsEntries.filter(isFeaturedRepoStatsEntry)));
+                setStatsLoading(false);
+            }
+        };
+
+        fetchFeaturedRepoStats();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const handleConnectGitHub = async () => {
@@ -31,23 +140,23 @@ export default function OpenSourcePage() {
             provider.addScope('read:user');
             provider.addScope('repo');
 
-            let result;
             let token;
-            let githubUser;
 
             try {
                 // Try linking first
-                result = await linkWithPopup(auth.currentUser!, provider);
+                const result = await linkWithPopup(auth.currentUser!, provider);
                 const credential = GithubAuthProvider.credentialFromResult(result);
                 token = credential?.accessToken;
-                githubUser = result.user;
-            } catch (linkError: any) {
-                if (linkError.code === 'auth/credential-already-in-use') {
+            } catch (linkError: unknown) {
+                const authError = linkError as { code?: string };
+                if (authError.code === 'auth/credential-already-in-use') {
                     // Fallback: Connect for Data Only automatically
                     // We don't merge accounts, just use the token for fetching data.
 
                     // Try to retrieve credential from the error
-                    const credential = GithubAuthProvider.credentialFromError(linkError);
+                    const credential = GithubAuthProvider.credentialFromError(
+                        linkError as Parameters<typeof GithubAuthProvider.credentialFromError>[0]
+                    );
                     if (credential) {
                         token = credential.accessToken;
                         // We don't have the user object here, but we can fetch profile with the token
@@ -65,17 +174,21 @@ export default function OpenSourcePage() {
                 localStorage.setItem('github_access_token', token); // Persist token
 
                 // Fetch Extended Data
-                const { fetchUserProfile, fetchUserRepos, fetchUserActivity } = await import('@/lib/github');
-                const profile = await fetchUserProfile(token);
-                const repos = await fetchUserRepos(token);
-                const activity = await fetchUserActivity(profile.login, token);
+                const { fetchUserProfile, fetchUserRepos, fetchUserActivity, fetchRepoContributorStats, calculateUserLinesContributed } = await import('@/lib/github');
+                const profile = await fetchUserProfile(token) as GitHubProfile;
+                const repos = await fetchUserRepos(token) as GitHubRepo[];
+                const activity = await fetchUserActivity(profile.login, token) as GitHubActivityEvent[];
+
+                // Fetch contributor stats (lines and commits)
+                const repoStats = await fetchRepoContributorStats(token);
+                const userLineStats = calculateUserLinesContributed(repoStats, profile.login);
 
                 // Calculate Total Stars
-                const totalStars = repos.reduce((acc: number, repo: any) => acc + (repo.stargazers_count || 0), 0);
+                const totalStars = repos.reduce((acc, repo) => acc + (repo.stargazers_count || 0), 0);
 
                 // Calculate Top Languages
                 const languageCounts: Record<string, number> = {};
-                repos.forEach((repo: any) => {
+                repos.forEach((repo) => {
                     if (repo.language) {
                         languageCounts[repo.language] = (languageCounts[repo.language] || 0) + 1;
                     }
@@ -94,7 +207,7 @@ export default function OpenSourcePage() {
                         followers: profile.followers,
                         following: profile.following,
                         lastFetched: new Date().toISOString(),
-                        recentActivity: activity.slice(0, 5).map((event: any) => ({
+                        recentActivity: activity.slice(0, 5).map((event) => ({
                             id: event.id,
                             type: event.type,
                             repo: { name: event.repo.name, url: `https://github.com/${event.repo.name}` },
@@ -102,10 +215,14 @@ export default function OpenSourcePage() {
                         })),
                         totalStars,
                         topLanguages,
-                        bio: profile.bio,
-                        company: profile.company,
-                        location: profile.location,
-                        createdAt: profile.created_at
+                        bio: profile.bio || undefined,
+                        company: profile.company || undefined,
+                        location: profile.location || undefined,
+                        createdAt: profile.created_at,
+                        linesAdded: userLineStats.additions,
+                        linesRemoved: userLineStats.deletions,
+                        linesContributed: userLineStats.additions,
+                        contributions: userLineStats.commits
                     },
                     github: profile.login, // Store username
                     // Store detailed data in subcollection or just basic stats here? 
@@ -125,7 +242,7 @@ export default function OpenSourcePage() {
                 const reposRef = collection(db, collectionName, docId, 'github_repos');
 
                 // Save top 10 repos for now to save writes
-                repos.slice(0, 10).forEach((repo: any) => {
+                repos.slice(0, 10).forEach((repo) => {
                     const repoDoc = doc(reposRef, repo.id.toString());
                     batch.set(repoDoc, repo);
                 });
@@ -134,9 +251,10 @@ export default function OpenSourcePage() {
                 alert("GitHub account connected successfully!");
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error connecting GitHub:", error);
-            alert("Failed to connect GitHub: " + error.message);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            alert("Failed to connect GitHub: " + message);
         } finally {
             setConnecting(false);
         }
@@ -166,7 +284,7 @@ export default function OpenSourcePage() {
                                     <Check size={20} /> GitHub Connected as {user.githubStats.username}
                                 </div>
                                 {!accessToken && (
-                                    <button
+                                    <button aria-label="Action button" 
                                         onClick={handleConnectGitHub}
                                         className="text-sm text-muted-foreground hover:text-primary underline"
                                     >
@@ -175,7 +293,7 @@ export default function OpenSourcePage() {
                                 )}
                             </div>
                         ) : (
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={handleConnectGitHub}
                                 disabled={connecting}
                                 className="flex items-center gap-2 px-6 py-3 bg-[#24292e] text-white rounded-full hover:bg-[#2f363d] transition-colors font-medium disabled:opacity-50"
@@ -208,92 +326,95 @@ export default function OpenSourcePage() {
                         <Star className="text-yellow-500" /> Featured Repositories
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {/* Repo 1 */}
-                        <div className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                        <BookOpen size={20} />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold">DevPath Website</h3>
-                                        <p className="text-xs text-muted-foreground">Official Community Website</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1 text-xs font-medium bg-muted px-2 py-1 rounded">
-                                    <Star size={12} className="text-yellow-500" /> 120+
-                                </div>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                                The official website for the DevPath community, built with Next.js, Tailwind CSS, and Firebase.
-                            </p>
-                            <div className="flex items-center justify-between mt-auto">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> TypeScript
-                                </div>
-                                <Link href="https://github.com/Aditya948351/DevPath-Community-Website" target="_blank" className="text-sm font-medium hover:underline flex items-center gap-1">
-                                    View Code <ExternalLink size={14} />
-                                </Link>
-                            </div>
-                        </div>
+                        {siteConfig.featuredRepos.map((repo) => {
+                            const IconComponent =
+                                repo.icon === 'BookOpen' ? BookOpen
+                                : repo.icon === 'Code2'   ? Code2
+                                : Globe;
+                            const liveStats = repoStats[repo.name];
 
-                        {/* Repo 2 */}
-                        <div className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                        <Code2 size={20} />
+                            return (
+                                <div
+                                    key={repo.name}
+                                    className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all flex flex-col"
+                                >
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                                                <IconComponent size={20} />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold">{repo.name}</h3>
+                                                <p className="text-xs text-muted-foreground">{repo.description}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs font-medium bg-muted px-2 py-1 rounded shrink-0">
+                                            <span className="flex items-center gap-1">
+                                                <Star size={12} className="text-yellow-500" />
+                                                {liveStats ? liveStats.stars.toLocaleString() : repo.stars}
+                                            </span>
+                                            {liveStats && (
+                                                <span className="flex items-center gap-1 text-muted-foreground">
+                                                    <GitFork size={12} />
+                                                    {liveStats.forks.toLocaleString()}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold">DevPath CLI</h3>
-                                        <p className="text-xs text-muted-foreground">Command Line Tool</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1 text-xs font-medium bg-muted px-2 py-1 rounded">
-                                    <Star size={12} className="text-yellow-500" /> 45+
-                                </div>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                                A powerful CLI tool to help developers navigate their learning paths and access resources directly from the terminal.
-                            </p>
-                            <div className="flex items-center justify-between mt-auto">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span> JavaScript
-                                </div>
-                                <Link href="#" className="text-sm font-medium hover:underline flex items-center gap-1">
-                                    View Code <ExternalLink size={14} />
-                                </Link>
-                            </div>
-                        </div>
 
-                        {/* Repo 3 */}
-                        <div className="bg-card border border-border rounded-xl p-6 hover:border-primary/50 transition-all">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                        <Globe size={20} />
+                                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2 flex-1">
+                                        {repo.longDescription}
+                                    </p>
+
+                                    <div className="flex items-center justify-between mt-auto">
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <span className={`w-2 h-2 rounded-full ${repo.languageColor}`}></span>
+                                            {repo.language}
+                                            {liveStats && (
+                                                <span className="ml-2">
+                                                    {liveStats.openIssues.toLocaleString()} open issues
+                                                </span>
+                                            )}
+                                            {!liveStats && statsLoading && repo.isPublic && (
+                                                <span className="ml-2">Updating stats...</span>
+                                            )}
+                                        </div>
+
+                                        {repo.isPublic && repo.url ? (
+                                            <Link
+                                                href={repo.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm font-medium hover:underline flex items-center gap-1"
+                                                aria-label={`View code for ${repo.name}`}
+                                            >
+                                                View Code <ExternalLink size={14} />
+                                            </Link>
+                                        ) : (
+                                            /* Disabled state for repos not yet public */
+                                            <div className="relative group/tooltip">
+                                                <button
+                                                    disabled
+                                                    aria-disabled="true"
+                                                    aria-label={`${repo.name} coming soon`}
+                                                    className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground/50 cursor-not-allowed select-none"
+                                                >
+                                                    <Clock size={14} />
+                                                    Coming Soon
+                                                </button>
+                                                {/* Tooltip */}
+                                                <div
+                                                    role="tooltip"
+                                                    className="pointer-events-none absolute bottom-full right-0 mb-2 w-max max-w-[180px] rounded-md bg-popover border border-border px-3 py-1.5 text-xs text-popover-foreground shadow-md opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200"
+                                                >
+                                                    This repository is not yet public. Check back soon!
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold">Learning Resources</h3>
-                                        <p className="text-xs text-muted-foreground">Curated Lists</p>
-                                    </div>
                                 </div>
-                                <div className="flex items-center gap-1 text-xs font-medium bg-muted px-2 py-1 rounded">
-                                    <Star size={12} className="text-yellow-500" /> 80+
-                                </div>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                                A comprehensive collection of free learning resources, roadmaps, and guides for developers of all levels.
-                            </p>
-                            <div className="flex items-center justify-between mt-auto">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span className="w-2 h-2 rounded-full bg-purple-500"></span> Markdown
-                                </div>
-                                <Link href="#" className="text-sm font-medium hover:underline flex items-center gap-1">
-                                    View Code <ExternalLink size={14} />
-                                </Link>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -310,7 +431,7 @@ export default function OpenSourcePage() {
                             </div>
                             <h3 className="text-xl font-bold mb-2">GitHub</h3>
                             <p className="text-muted-foreground mb-4">
-                                The world's largest platform for developer collaboration. Home to millions of open source projects.
+                                The world&apos;s largest platform for developer collaboration. Home to millions of open source projects.
                             </p>
                             <Link href="https://github.com" target="_blank" className="text-primary text-sm font-medium flex items-center gap-1 hover:underline">
                                 Visit Platform <ExternalLink size={14} />
@@ -376,7 +497,7 @@ export default function OpenSourcePage() {
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-lg">Make Your First Contribution</h3>
-                                    <p className="text-muted-foreground">Start small. Fix a typo, update documentation, or tackle a "Good First Issue".</p>
+                                    <p className="text-muted-foreground">Start small. Fix a typo, update documentation, or tackle a &quot;Good First Issue&quot;.</p>
                                 </div>
                             </div>
                         </div>

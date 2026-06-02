@@ -30,65 +30,173 @@ if start_idx == -1:
 # We want to replace everything inside the try block basically.
 
 new_logic = """    const handleRecalculateAll = async () => {
-        if (!confirm("Are you sure you want to RECALCULATE ALL BADGES & POINTS for ALL USERS? This disregards the 24h limit.")) return;
+        if (!confirm("Are you sure you want to RECALCULATE ALL BADGES & POINTS for ALL USERS (Members & Admins)?\\n\\nThis will:\\n- Recalculate badge eligibility for all users\\n- Award XP for newly earned badges only\\n- Preserve existing transactional points\\n- Update leaderboard accordingly\\n\\nThis action cannot be undone.")) return;
 
         setMigrating(true);
-        setMigrationLog(['Starting Full Recalculation...']);
+        setMigrationLog(['Starting Full Recalculation...', 'Initializing...']);
+
+        // Statistics tracking
+        const stats = {
+            totalUsers: 0,
+            processedUsers: 0,
+            skippedUsers: 0,
+            newBadgesAwarded: 0,
+            totalXpAwarded: 0,
+            errors: 0,
+            usersWithChanges: 0
+        };
 
         try {
-            const membersRef = collection(db, 'members');
-            const snapshot = await getDocs(membersRef);
             const batch = (await import('firebase/firestore')).writeBatch(db);
+            const { determineBadges, getBadgeXp } = await import('@/lib/point-calculation');
+            const { increment } = await import('firebase/firestore');
             let count = 0;
             let batchCount = 0;
 
-            setMigrationLog((prev: string[]) => [...prev, `Found ${snapshot.size} members.`]);
+            // 1. Fetch Members
+            setMigrationLog((prev: string[]) => [...prev, 'Fetching members...']);
+            const membersRef = collection(db, 'members');
+            const membersSnapshot = await getDocs(membersRef);
+            setMigrationLog((prev: string[]) => [...prev, `Found ${membersSnapshot.size} members.`]);
 
-            for (const memberDoc of snapshot.docs) {
-                const data = memberDoc.data();
-                const uid = memberDoc.id;
-                
-                // Fetch Projects for this user
-                const projectsRef = collection(db, 'members', uid, 'projects');
-                const projectsSnap = await getDocs(projectsRef);
-                const userProjects = projectsSnap.docs.map(doc => doc.data());
+            // 2. Fetch Admins
+            setMigrationLog((prev: string[]) => [...prev, 'Fetching admins...']);
+            const adminsRef = collection(db, 'admins');
+            const adminsSnapshot = await getDocs(adminsRef);
+            setMigrationLog((prev: string[]) => [...prev, `Found ${adminsSnapshot.size} admins.`]);
 
-                // Calculate using shared logic
-                const result = calculateUserPointsAndBadges({ uid, ...data }, userProjects);
+            // Combine for processing
+            const allDocs = [
+                ...membersSnapshot.docs.map(d => ({ ...d.data(), id: d.id, collection: 'members', isAuthUid: true })),
+                ...adminsSnapshot.docs.map(d => ({ ...d.data(), id: d.id, collection: 'admins', isAuthUid: false }))
+            ];
 
-                // Update Member
-                const memberRef = doc(db, 'members', uid);
-                batch.update(memberRef, { 
-                    points: result.points,
-                    achievements: result.achievements,
-                    lastBadgeScan: Date.now() // Reset scan time
-                });
+            stats.totalUsers = allDocs.length;
+            setMigrationLog((prev: string[]) => [...prev, `Total users to process: ${stats.totalUsers}`]);
+            setMigrationLog((prev: string[]) => [...prev, 'Starting badge recalculation...']);
 
-                // Update Leaderboard
-                const leaderboardRef = doc(db, 'leaderboard', uid);
-                batch.set(leaderboardRef, { points: result.points }, { merge: true });
+            for (const userDoc of allDocs) {
+                const data = userDoc as any;
+                const docId = userDoc.id;
+                const collectionName = userDoc.collection;
 
-                count++;
-                batchCount++;
-                if (batchCount >= 400) {
-                    await batch.commit();
-                    setMigrationLog((prev: string[]) => [...prev, `Processed ${count} users...`]);
-                    batchCount = 0;
+                // For Leaderboard, we need the Auth UID
+                const authUid = collectionName === 'members' ? docId : data.uid;
+
+                if (!authUid) {
+                    setMigrationLog((prev: string[]) => [...prev, `⚠️ Skipping ${docId}: No Auth UID found.`]);
+                    stats.skippedUsers++;
+                    stats.errors++;
+                    continue;
+                }
+
+                try {
+                    // Fetch Projects for this user
+                    const projectsRef = collection(db, 'members', authUid, 'projects');
+                    const projectsSnap = await getDocs(projectsRef);
+                    const userProjects = projectsSnap.docs.map(doc => doc.data());
+
+                    // Calculate badges using safe method (preserves existing points)
+                    const achievements = determineBadges({ uid: authUid, ...data }, userProjects);
+                    const currentBadges = data.achievements || [];
+                    
+                    // Identify only newly earned badges (incremental approach)
+                    const newBadges = achievements.filter(id => !currentBadges.includes(id));
+                    const newBadgeXp = newBadges.reduce((sum, id) => sum + getBadgeXp(id), 0);
+
+                    // Skip if no changes needed
+                    if (newBadges.length === 0) {
+                        stats.skippedUsers++;
+                        count++;
+                        batchCount++;
+                        
+                        // Still update lastBadgeScan to refresh the timestamp
+                        const userRef = doc(db, collectionName, docId);
+                        batch.update(userRef, { lastBadgeScan: Date.now() });
+                        
+                        if (batchCount >= 400) {
+                            await batch.commit();
+                            setMigrationLog((prev: string[]) => [...prev, `Processed ${count}/${stats.totalUsers} users...`]);
+                            batchCount = 0;
+                        }
+                        continue;
+                    }
+
+                    // Update User Doc (in correct collection)
+                    const userRef = doc(db, collectionName, docId);
+                    
+                    // Build update object - only update achievements and scan time
+                    // DO NOT overwrite points - preserve existing transactional XP
+                    const userUpdate: any = {
+                        achievements: achievements,
+                        lastBadgeScan: Date.now()
+                    };
+                    
+                    // Only increment points for newly earned badges
+                    if (newBadgeXp > 0) {
+                        userUpdate.points = increment(newBadgeXp);
+                    }
+                    
+                    batch.update(userRef, userUpdate);
+
+                    // Update Leaderboard (Always uses Auth UID)
+                    // Only update if there are new badge points to add
+                    if (newBadgeXp > 0) {
+                        const leaderboardRef = doc(db, 'leaderboard', authUid);
+                        batch.set(leaderboardRef, { points: increment(newBadgeXp) }, { merge: true });
+                    }
+
+                    // Track statistics
+                    stats.newBadgesAwarded += newBadges.length;
+                    stats.totalXpAwarded += newBadgeXp;
+                    stats.usersWithChanges++;
+                    
+                    setMigrationLog((prev: string[]) => [...prev, 
+                        `✓ ${docId}: +${newBadges.length} badges, +${newBadgeXp} XP`
+                    ]);
+
+                    stats.processedUsers++;
+                    count++;
+                    batchCount++;
+                    
+                    if (batchCount >= 400) {
+                        await batch.commit();
+                        setMigrationLog((prev: string[]) => [...prev, `Processed ${count}/${stats.totalUsers} users...`]);
+                        batchCount = 0;
+                    }
+                } catch (err) {
+                    console.error(`Error processing user ${docId}:`, err);
+                    setMigrationLog((prev: string[]) => [...prev, `❌ Error processing ${docId}: ${err}`]);
+                    stats.errors++;
+                    stats.skippedUsers++;
                 }
             }
-            
+
             // Commit remaining
             if (batchCount > 0) {
-                 await batch.commit();
+                await batch.commit();
             }
 
-            setMigrationLog((prev: string[]) => [...prev, `Recalculation Complete. Processed ${count} users.`]);
-            alert("Recalculation Complete!");
+            // Final summary
+            setMigrationLog((prev: string[]) => [...prev, '']);
+            setMigrationLog((prev: string[]) => [...prev, '═══════════════════════════════════════']);
+            setMigrationLog((prev: string[]) => [...prev, 'RECALCULATION COMPLETE']);
+            setMigrationLog((prev: string[]) => [...prev, '═══════════════════════════════════════']);
+            setMigrationLog((prev: string[]) => [...prev, `Total Users: ${stats.totalUsers}`]);
+            setMigrationLog((prev: string[]) => [...prev, `Processed: ${stats.processedUsers}`]);
+            setMigrationLog((prev: string[]) => [...prev, `Skipped (no changes): ${stats.skippedUsers}`]);
+            setMigrationLog((prev: string[]) => [...prev, `Users with Changes: ${stats.usersWithChanges}`]);
+            setMigrationLog((prev: string[]) => [...prev, `New Badges Awarded: ${stats.newBadgesAwarded}`]);
+            setMigrationLog((prev: string[]) => [...prev, `Total XP Awarded: ${stats.totalXpAwarded}`]);
+            setMigrationLog((prev: string[]) => [...prev, `Errors: ${stats.errors}`]);
+            setMigrationLog((prev: string[]) => [...prev, '═══════════════════════════════════════']);
+
+            alert(`Recalculation Complete!\\n\\nTotal Users: ${stats.totalUsers}\\nProcessed: ${stats.processedUsers}\\nNew Badges: ${stats.newBadgesAwarded}\\nTotal XP Awarded: ${stats.totalXpAwarded}\\nErrors: ${stats.errors}`);
 
         } catch (error) {
             console.error("Recalculation failed:", error);
-            setMigrationLog((prev: string[]) => [...prev, `Fatal Error: ${error}`]);
-            alert("Recalculation failed.");
+            setMigrationLog((prev: string[]) => [...prev, `❌ Fatal Error: ${error}`]);
+            alert(`Recalculation failed: ${error}`);
         } finally {
             setMigrating(false);
         }

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, MapPin, ExternalLink, Clock, DollarSign, GraduationCap, Star } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 
 interface InternshipCalendarModalProps {
@@ -72,25 +72,17 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
             const userRef = doc(db, 'members', user.uid);
 
             if (hasStarred) {
-                // Unstar
-                await updateDoc(resourceRef, {
-                    starCount: increment(-1)
-                });
-                await updateDoc(userRef, {
-                    starredResources: (await getDoc(userRef)).data()?.starredResources?.filter((id: string) => id !== 'Internship_Calendar_2026') || []
-                });
+                await Promise.all([
+                    updateDoc(resourceRef, { starCount: increment(-1) }),
+                    updateDoc(userRef, { starredResources: arrayRemove('Internship_Calendar_2026') })
+                ]);
                 setStarCount(prev => prev - 1);
                 setHasStarred(false);
             } else {
-                // Star
-                await updateDoc(resourceRef, {
-                    starCount: increment(1)
-                });
-                const userSnap = await getDoc(userRef);
-                const currentStarred = userSnap.data()?.starredResources || [];
-                await updateDoc(userRef, {
-                    starredResources: [...currentStarred, 'Internship_Calendar_2026']
-                });
+                await Promise.all([
+                    updateDoc(resourceRef, { starCount: increment(1) }),
+                    updateDoc(userRef, { starredResources: arrayUnion('Internship_Calendar_2026') })
+                ]);
                 setStarCount(prev => prev + 1);
                 setHasStarred(true);
             }
@@ -131,7 +123,7 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
                                             <Calendar className="text-primary" />
                                             2026 Internship Calendar
                                         </h2>
-                                        <button
+                                        <button aria-label="Action button" 
                                             onClick={handleStar}
                                             className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium transition-all ${hasStarred
                                                 ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
@@ -146,7 +138,7 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
                                         Curated list of top internship opportunities for 2026 batch.
                                     </p>
                                 </div>
-                                <button
+                                <button aria-label="Action button" 
                                     onClick={onClose}
                                     className="ml-4 p-2 hover:bg-white/10 rounded-lg transition-colors text-white/70 hover:text-white"
                                 >
@@ -156,7 +148,7 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
 
                             {/* Tabs */}
                             <div className="flex gap-2 px-6 pt-4 border-b border-white/10">
-                                <button
+                                <button aria-label="Action button" 
                                     onClick={() => setActiveTab('summer')}
                                     className={`px-4 py-2 rounded-t-lg font-medium transition-all ${activeTab === 'summer'
                                         ? 'bg-primary text-white'
@@ -165,7 +157,7 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
                                 >
                                     Summer Internships (May–July 2026)
                                 </button>
-                                <button
+                                <button aria-label="Action button" 
                                     onClick={() => setActiveTab('winter')}
                                     className={`px-4 py-2 rounded-t-lg font-medium transition-all ${activeTab === 'winter'
                                         ? 'bg-primary text-white'
@@ -227,7 +219,7 @@ export function InternshipCalendarModal({ isOpen, onClose }: InternshipCalendarM
                                                     {/* Links */}
                                                     <div className={`grid gap-3 ${internship.links.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                                         {internship.links.map((link: any, i: number) => (
-                                                            <a
+                                                            <a aria-label="Link" 
                                                                 key={i}
                                                                 href={link.url}
                                                                 target="_blank"

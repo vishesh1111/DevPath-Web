@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { Calendar, Video, MapPin, ExternalLink } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { db } from '@/lib/firebase';
@@ -95,15 +96,20 @@ function EventCard({ event, index, isCompleted = false }: { event: any, index: n
             style={{ perspective: 1000 }}
         >
             <div className={styles.cardContent}>
-                <div
-                    className={styles.thumbnail}
-                    style={{
-                        backgroundImage: event.image ? `url(${event.image})` : undefined,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        backgroundColor: event.image ? undefined : '#1a1f35'
-                    }}
-                />
+                <div className={styles.thumbnail}>
+                    {event.image && event.image.trim() !== '' ? (
+                        <Image
+                            src={event.image}
+                            alt={event.title || 'Event Image'}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 300px, 350px"
+                            priority={index === 0 && !isCompleted}
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-[#1a1f35]" />
+                    )}
+                </div>
 
                 <div className={styles.details}>
                     <div className={styles.dateBadge}>
@@ -127,7 +133,7 @@ function EventCard({ event, index, isCompleted = false }: { event: any, index: n
                                 <span className="text-xs font-bold text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full">
                                     Completed
                                 </span>
-                                <a
+                                <a aria-label="Link" 
                                     href="/certificate"
                                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-full text-xs font-bold hover:bg-blue-700 transition-colors"
                                 >
@@ -136,7 +142,7 @@ function EventCard({ event, index, isCompleted = false }: { event: any, index: n
                             </div>
                         ) : (
                             event.registerLink && (
-                                <a
+                                <a aria-label="Link" 
                                     href={event.registerLink}
                                     target="_blank"
                                     rel="noopener noreferrer"

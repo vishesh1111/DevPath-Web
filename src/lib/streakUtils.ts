@@ -1,9 +1,11 @@
 // Helper to get date string in IST (UTC+5:30)
 function getISTDateString(date: Date = new Date()): string {
-    // Offset by 5.5 hours (5 * 60 + 30 = 330 minutes)
-    const istOffset = 330 * 60 * 1000;
-    const istDate = new Date(date.getTime() + istOffset);
-    return istDate.toISOString().split('T')[0];
+    const options = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+    const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(date);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
 }
 
 export function calculateStreak(loginDates: string[] = []) {
@@ -15,27 +17,23 @@ export function calculateStreak(loginDates: string[] = []) {
 
     // Check current streak using IST
     const today = getISTDateString(new Date());
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterday = getISTDateString(yesterdayDate);
+    const yesterday = getISTDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
     if (sortedDates.includes(today)) {
         current = 1;
-        const checkDate = new Date();
-        checkDate.setDate(checkDate.getDate() - 1);
+        let checkTime = Date.now() - 24 * 60 * 60 * 1000;
 
-        while (sortedDates.includes(getISTDateString(checkDate))) {
+        while (sortedDates.includes(getISTDateString(new Date(checkTime)))) {
             current++;
-            checkDate.setDate(checkDate.getDate() - 1);
+            checkTime -= 24 * 60 * 60 * 1000;
         }
     } else if (sortedDates.includes(yesterday)) {
-        const checkDate = new Date();
-        checkDate.setDate(checkDate.getDate() - 1);
+        let checkTime = Date.now() - 24 * 60 * 60 * 1000;
         let streak = 0;
 
-        while (sortedDates.includes(getISTDateString(checkDate))) {
+        while (sortedDates.includes(getISTDateString(new Date(checkTime)))) {
             streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
+            checkTime -= 24 * 60 * 60 * 1000;
         }
         current = streak;
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from 'next/dynamic';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,22 +10,69 @@ import styles from './Hero.module.css';
 
 import { MagneticText } from '../ui/magnetic-text';
 
-import LatestEventsHighlight from './LatestEventsHighlight';
-import InternshipCalendarCard from './InternshipCalendarCard';
-import CertificateCard from './CertificateCard';
-
-// ... (existing imports)
-
-// Inside Hero component return:
-{/* Featured Content Grid */ }
-<div className="w-full px-2 mt-12 grid grid-cols-1 lg:grid-cols-2 gap-4 relative z-10">
-    <LatestEventsHighlight className="w-full mt-0 mb-0" />
-    <InternshipCalendarCard />
-    <CertificateCard />
-</div>
-import dynamic from 'next/dynamic';
+const LatestEventsHighlight = dynamic(() => import('./LatestEventsHighlight'));
+const InternshipCalendarCard = dynamic(() => import('./InternshipCalendarCard'));
+const CertificateCard = dynamic(() => import('./CertificateCard'));
+import { useEffect, useState, useRef } from 'react';
 
 const HeaderScene = dynamic(() => import('@/components/3d/HeaderScene'), { ssr: false });
+
+function AnimatedCounter({
+    target,
+    suffix = "",
+    duration = 2000,
+}: {
+    target: number;
+    suffix?: string;
+    duration?: number;
+}) {
+    const [count, setCount] = useState(0);
+    const [started, setStarted] = useState(false);
+    const ref = useRef<HTMLSpanElement | null>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setStarted(true);
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.5 }
+        );
+
+        if (ref.current) observer.observe(ref.current);
+
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!started) return;
+
+        let startTimestamp: number | null = null;
+
+        const step = (timestamp: number) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+
+            setCount(Math.floor(progress * target));
+
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            }
+        };
+
+        requestAnimationFrame(step);
+    }, [started, target, duration]);
+
+    return (
+        <span ref={ref}>
+            {count}
+            {suffix}
+        </span>
+    );
+}
 
 export default function Hero() {
     const scrollToSection = (id: string) => {
@@ -59,27 +107,38 @@ export default function Hero() {
                 </p>
 
                 <div className="flex flex-wrap justify-center gap-8 my-8">
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">500+</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={500} suffix="+" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Active Developers</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">50+</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={50} suffix="+" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Open Source Projects</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-3xl font-bold text-foreground">24/7</span>
+                    <div className={`${styles.statsItem} flex flex-col items-center`}>
+                        <span className="text-3xl font-bold text-foreground">
+                            <AnimatedCounter target={24} suffix="/7" />
+                        </span>
                         <span className="text-sm text-muted-foreground">Peer Support</span>
                     </div>
                 </div>
 
-                <div className={styles.ctas}>
-                    {/* TODO: Add Download CTA when mobile app launches */}
-                    <Link href="https://linkly.link/2WCTY" target="_blank" rel="noopener noreferrer">
-                        <Button variant="primary" icon={<ArrowRight size={20} />}>
+                <div className={`${styles.ctas} flex flex-col sm:flex-row items-center gap-4 sm:gap-2`}>
+                    <Link href="/signup" className="w-full sm:w-auto">
+                        <Button aria-label="Sign Up" variant="primary" icon={<ArrowRight size={20} />} className="w-full sm:w-auto justify-center">
+                            Sign Up
+                        </Button>
+                    </Link>
+                    <Link href="https://linkly.link/2WCTY" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+                        <Button aria-label="Join Community" variant="secondary" icon={<ArrowRight size={20} />} className="w-full sm:w-auto justify-center">
                             Join Community
                         </Button>
                     </Link>
+
                 </div>
 
             </div>

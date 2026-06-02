@@ -1,28 +1,45 @@
-﻿"use client";
-
+"use client";
+const AVATAR_FALLBACK = process.env.NEXT_PUBLIC_AVATAR_FALLBACK_URL ?? 'https://ui-avatars.com/api';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { teamMembers } from '@/data/team';
-import { Trophy, Flame, Star, Target, MapPin, Link as LinkIcon, Calendar, Phone, LogOut, Camera, Save, X, Github, Instagram, Linkedin, CheckCircle, Share2, Shield, Copy, Check, Plus, Edit3, Users, Globe, BookOpen, GitMerge } from 'lucide-react';
+import { Trophy, Flame, Star, Target, MapPin, Link as LinkIcon, Calendar, Phone, LogOut, Camera, Save, X, Github, Instagram, Linkedin, CheckCircle, Share2, Shield, Copy, Check, Plus, Edit3, Users, Globe, BookOpen, GitMerge, Code2 } from 'lucide-react';
 import styles from './Profile.module.css';
 import 'github-markdown-css/github-markdown.css';
 import ProjectUploadModal from '@/components/projects/ProjectUploadModal';
 import ProjectCard from '@/components/projects/ProjectCard';
 import Achievements from '@/components/profile/Achievements';
 import Rewards from '@/components/profile/Rewards';
+import DevCard from '@/components/profile/DevCard';
 import FollowButton from '@/components/profile/FollowButton';
 import LoginHeatmap from '@/components/profile/LoginHeatmap';
+import GithubStats from './GithubStats';
 import ReactMarkdown from 'react-markdown';
+import DOMPurify from 'dompurify';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { collection, query, where, orderBy, getDocs, doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { calculateLevel } from '@/lib/points';
 import { getEmbedUrl } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/clipboard';
+import { GIT_FALLBACK_STATS } from '@/lib/github';
+import { getSafeSocialUrl, sanitizeSocialLinks } from '@/lib/safe-social-url';
+import { useNotification } from '@/context/NotificationContext';
 
+/**
+ * UserProfile component renders the main dashboard profile page for authenticated developers.
+ * It manages:
+ * - Local layout state for editing avatars and bios.
+ * - Loading and sorting uploaded developer projects from Firestore.
+ * - Real-time calculations of gamification Dev Points, progress levels, and achievements.
+ * - Rendering animated progress rings and privacy toggle modals.
+ */
 export default function UserProfile() {
-    const { user, logout, updateUserProfile } = useAuth();
+    const { user, logout, updateUserProfile, awardPoints } = useAuth();
+    const { showSuccess, showError } = useNotification();
     const router = useRouter();
 
     useEffect(() => {
@@ -32,6 +49,23 @@ export default function UserProfile() {
     }, [user, router]);
 
     const [isEditingPhoto, setIsEditingPhoto] = useState(false);
+    const [mountedProgress, setMountedProgress] = useState(0);
+
+    const levelInfo = calculateLevel(user?.points || 0);
+    const targetProgress = levelInfo.progress;
+
+    /**
+     * Triggers animated loading effect for the custom circular progress ring
+     * once the component is mounted.
+     */
+    useEffect(() => {
+        if (user) {
+            const timer = setTimeout(() => {
+                setMountedProgress(targetProgress);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [user, targetProgress]);
     const [newPhotoURL, setNewPhotoURL] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -59,8 +93,26 @@ export default function UserProfile() {
     // Followers/Following Modal State
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [showFollowingModal, setShowFollowingModal] = useState(false);
-    const [modalUsers, setModalUsers] = useState<any[]>([]);
-    const [loadingModalUsers, setLoadingModalUsers] = useState(false);
+    const [followersList, setFollowersList] = useState<any[]>([]);
+    const [followingList, setFollowingList] = useState<any[]>([]);
+    const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
+    const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
+
+    // Sync aboutContent when user data loads from AuthContext
+useEffect(() => {
+    if (user?.aboutMarkdown) setAboutContent(user.aboutMarkdown);
+}, [user?.aboutMarkdown]);
+
+// Sync socialLinks when user data loads from AuthContext
+useEffect(() => {
+    if (user) {
+        setSocialLinks({
+            github: user.github || '',
+            linkedin: user.linkedin || '',
+            instagram: user.instagram || ''
+        });
+    }
+}, [user?.github, user?.linkedin, user?.instagram]);
 
     useEffect(() => {
         if (user?.uid) {
@@ -125,9 +177,9 @@ export default function UserProfile() {
         if (earnedRisingStar && !hasRisingStarBadge) {
             try {
                 await updateUserProfile({
-                    achievements: [...(user.achievements || []), RISING_STAR_BADGE_ID],
-                    points: (user.points || 0) + 10
+                    achievements: [...(user.achievements || []), RISING_STAR_BADGE_ID]
                 });
+                await awardPoints(10);
                 alert("🎉 Congratulations! You earned the 'Rising Star' badge and 10 XP!");
             } catch (error) {
                 console.error("Error awarding badge:", error);
@@ -145,12 +197,18 @@ export default function UserProfile() {
         await updateUserProfile({ privacySettings: newSettings });
     };
 
-    const handleShareProfile = () => {
+    const handleShareProfile = async () => {
         if (!user) return;
-        const url = `${window.location.origin}/u?uid=${user.uid}`;
-        navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const url = `${window.location.origin}/u/${user.uid}`;
+        const copied = await copyToClipboard(url);
+
+        if (copied) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Profile link copied to clipboard.');
+        } else {
+            showError('Copying the profile link is not supported in this browser.');
+        }
     };
 
     const handleSavePhoto = async () => {
@@ -171,16 +229,17 @@ export default function UserProfile() {
     const handleSaveAbout = async () => {
         setIsSaving(true);
         try {
+            const safeSocialLinks = sanitizeSocialLinks(socialLinks);
+            const trimmedAbout = aboutContent.trim();
             await updateUserProfile({
-                aboutMarkdown: aboutContent,
-                github: socialLinks.github,
-                linkedin: socialLinks.linkedin,
-                instagram: socialLinks.instagram
+                aboutMarkdown: trimmedAbout,
+                ...safeSocialLinks
             });
+            setSocialLinks(safeSocialLinks);
             setIsEditingAbout(false);
         } catch (error) {
             console.error("Failed to update profile:", error);
-            alert("Failed to update profile. Please try again.");
+            alert(error instanceof Error ? error.message : "Failed to update profile. Please try again.");
         } finally {
             setIsSaving(false);
         }
@@ -193,10 +252,8 @@ export default function UserProfile() {
 
     const fetchModalUsers = async (uids: string[]) => {
         if (!uids || uids.length === 0) {
-            setModalUsers([]);
-            return;
+            return [];
         }
-        setLoadingModalUsers(true);
         try {
             // Fetch users one by one (optimization: use 'in' query for batches of 10 if needed)
             const { getDoc } = await import('firebase/firestore');
@@ -223,22 +280,47 @@ export default function UserProfile() {
 
                 return null;
             }));
-            setModalUsers(users.filter(u => u !== null));
+            return users.filter(u => u !== null);
         } catch (error) {
             console.error("Error fetching modal users:", error);
-        } finally {
-            setLoadingModalUsers(false);
+            return [];
         }
     };
 
-    const openFollowers = () => {
-        setShowFollowersModal(true);
-        fetchModalUsers(user?.followers || []);
+    const openFollowers = async () => {
+        setIsLoadingFollowers(true);
+        try {
+            const users = await fetchModalUsers(user?.followers || []);
+            setFollowersList(users);
+            setShowFollowersModal(true);
+        } catch (error) {
+            console.error("Failed to load followers:", error);
+        } finally {
+            setIsLoadingFollowers(false);
+        }
     };
 
-    const openFollowing = () => {
-        setShowFollowingModal(true);
-        fetchModalUsers(user?.following || []);
+    const openFollowing = async () => {
+        setIsLoadingFollowing(true);
+        try {
+            const users = await fetchModalUsers(user?.following || []);
+            setFollowingList(users);
+            setShowFollowingModal(true);
+        } catch (error) {
+            console.error("Failed to load following:", error);
+        } finally {
+            setIsLoadingFollowing(false);
+        }
+    };
+
+    const closeFollowersModal = () => {
+        setShowFollowersModal(false);
+        setFollowersList([]);
+    };
+
+    const closeFollowingModal = () => {
+        setShowFollowingModal(false);
+        setFollowingList([]);
     };
 
     if (!user) {
@@ -249,6 +331,12 @@ export default function UserProfile() {
         );
     }
 
+    const safeSocialLinks = {
+        github: getSafeSocialUrl(user.github, 'github'),
+        linkedin: getSafeSocialUrl(user.linkedin, 'linkedin'),
+        instagram: getSafeSocialUrl(user.instagram, 'instagram')
+    };
+
     return (
         <div className="min-h-screen bg-background text-foreground pb-8 px-4 md:px-8">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -258,14 +346,17 @@ export default function UserProfile() {
                     {/* Profile Card */}
                     <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
                         <div className="relative w-64 h-64 md:w-72 md:h-72 lg:w-full lg:h-auto lg:aspect-square mb-4 group">
-                            <img
-                                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.name}&background=random`}
-                                alt={user.name || 'User'}
-                                className="w-full h-full object-cover rounded-full border-4 border-card shadow-xl"
-                            />
-                            <button
+                            <div className="w-full h-full rounded-full overflow-hidden border-4 border-card shadow-xl relative">
+                                <Image
+                                    src={user.photoURL || `${AVATAR_FALLBACK}/?name=${user.name}&background=random`}
+                                    alt={user.name || 'User'}
+                                    fill
+                                    className="object-cover"
+                                />
+                            </div>
+                            <button aria-label="Action button"
                                 onClick={() => setIsEditingPhoto(!isEditingPhoto)}
-                                className="absolute bottom-4 right-4 p-2 bg-card text-foreground rounded-full border border-border shadow-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                                className="absolute bottom-2 right-2 md:bottom-4 md:right-4 p-2 bg-card text-foreground rounded-full border border-border shadow-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 z-10"
                                 title="Change Avatar"
                             >
                                 <Camera size={18} />
@@ -284,8 +375,8 @@ export default function UserProfile() {
                                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md mb-2"
                                 />
                                 <div className="flex gap-2">
-                                    <button onClick={handleSavePhoto} disabled={isSaving} className="flex-1 bg-primary text-primary-foreground py-1 rounded text-sm">Save</button>
-                                    <button onClick={() => setIsEditingPhoto(false)} className="flex-1 bg-muted text-muted-foreground py-1 rounded text-sm">Cancel</button>
+                                    <button aria-label="Action button" onClick={handleSavePhoto} disabled={isSaving} className="flex-1 bg-primary text-primary-foreground py-1 rounded text-sm">Save</button>
+                                    <button aria-label="Action button" onClick={() => setIsEditingPhoto(false)} className="flex-1 bg-muted text-muted-foreground py-1 rounded text-sm">Cancel</button>
                                 </div>
                             </div>
                         )}
@@ -307,7 +398,7 @@ export default function UserProfile() {
                         <p className="text-muted-foreground text-lg mb-4">@{user.email?.split('@')[0]}</p>
 
                         <div className="w-full mb-6">
-                            <button
+                            <button aria-label="Action button"
                                 onClick={() => setIsEditingAbout(true)}
                                 className="w-full py-2 bg-card border border-border rounded-lg hover:bg-muted transition-colors font-medium text-sm"
                             >
@@ -316,11 +407,11 @@ export default function UserProfile() {
                         </div>
 
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
-                            <button onClick={openFollowers} className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
+                            <button aria-label="Action button" onClick={openFollowers} className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
                                 <Users size={16} />
                                 <span className="font-bold text-foreground">{user.followers?.length || 0}</span> followers
                             </button>
-                            <button onClick={openFollowing} className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
+                            <button aria-label="Action button" onClick={openFollowing} className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
                                 <span className="font-bold text-foreground">{user.following?.length || 0}</span> following
                             </button>
                         </div>
@@ -335,37 +426,46 @@ export default function UserProfile() {
                             {user.privacySettings?.showEmail && (
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                     <LinkIcon size={16} />
-                                    <a href={`mailto:${user.email}`} className="hover:text-primary truncate">{user.email}</a>
+                                    <a aria-label="Email" href={`mailto:${user.email}`} className="hover:text-primary truncate">{user.email}</a>
                                 </div>
                             )}
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Calendar size={16} />
-                                <span>Joined Dec 2023</span>
+                                <span>Joined {(() => {
+                                    if (!user.createdAt) return 'Dec 2023';
+                                    try {
+                                        const d = new Date(user.createdAt.seconds ? user.createdAt.seconds * 1000 : user.createdAt);
+                                        if (isNaN(d.getTime())) return 'Dec 2023';
+                                        return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+                                    } catch (e) {
+                                        return 'Dec 2023';
+                                    }
+                                })()}</span>
                             </div>
                         </div>
 
                         <div className="flex gap-3 mt-6">
-                            {user.github && <a href={user.github} target="_blank" className="text-muted-foreground hover:text-foreground"><Github size={20} /></a>}
-                            {user.linkedin && <a href={user.linkedin} target="_blank" className="text-muted-foreground hover:text-foreground"><Linkedin size={20} /></a>}
-                            {user.instagram && <a href={user.instagram} target="_blank" className="text-muted-foreground hover:text-foreground"><Instagram size={20} /></a>}
+                            {safeSocialLinks.github && <a aria-label="GitHub" href={safeSocialLinks.github} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground"><Github size={20} /></a>}
+                            {safeSocialLinks.linkedin && <a aria-label="LinkedIn" href={safeSocialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground"><Linkedin size={20} /></a>}
+                            {safeSocialLinks.instagram && <a aria-label="Instagram" href={safeSocialLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground"><Instagram size={20} /></a>}
                         </div>
                     </div>
 
                     {/* Achievements Sidebar Removed as per request */}
                     <div className="pt-6 border-t border-border">
-                        <button
+                        <button aria-label="Action button"
                             onClick={() => setShowPrivacyModal(true)}
                             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-2"
                         >
                             <Shield size={16} /> Privacy Settings
                         </button>
-                        <button
+                        <button aria-label="Action button"
                             onClick={handleShareProfile}
                             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-2"
                         >
                             {copied ? <Check size={16} /> : <Share2 size={16} />} Share Profile
                         </button>
-                        <button
+                        <button aria-label="Action button"
                             onClick={() => {
                                 logout();
                                 window.location.href = '/';
@@ -382,31 +482,105 @@ export default function UserProfile() {
 
                     {/* Hero / Intro */}
                     <div className="bg-card border border-border rounded-xl p-8 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                             <Target size={120} />
                         </div>
-                        <h2 className="text-3xl font-bold mb-2">Hi 👋, I'm {user.name}</h2>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+                            {/* Left Content Column */}
+                            <div className="md:col-span-2 space-y-4 text-left">
+                                <h2 className="text-3xl font-bold">Hi 👋, I'm {user.name}</h2>
+                                
+                                {/* Level & Points Display */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    {calculateLevel(user.points || 0).currentLevel.name === 'Sanrakshak' ? (
+                                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                            <Shield size={14} />
+                                            Sanrakshak
+                                        </span>
+                                    ) : (
+                                        <span className={`px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${calculateLevel(user.points || 0).currentLevel.bg} ${calculateLevel(user.points || 0).currentLevel.color} border ${calculateLevel(user.points || 0).currentLevel.border}`}>
+                                            {calculateLevel(user.points || 0).currentLevel.name}
+                                        </span>
+                                    )}
+                                    <span className="text-muted-foreground text-sm font-mono">
+                                        {user.points || 0} Dev Points
+                                    </span>
+                                </div>
 
-                        {/* Level & Points Display */}
-                        <div className="flex items-center gap-3 mb-6">
-                            {calculateLevel(user.points || 0).currentLevel.name === 'Sanrakshak' ? (
-                                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                    <Shield size={14} />
-                                    Sanrakshak
-                                </span>
-                            ) : (
-                                <span className={`px-3 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${calculateLevel(user.points || 0).currentLevel.bg} ${calculateLevel(user.points || 0).currentLevel.color} border ${calculateLevel(user.points || 0).currentLevel.border}`}>
-                                    {calculateLevel(user.points || 0).currentLevel.name}
-                                </span>
-                            )}
-                            <span className="text-muted-foreground text-sm font-mono">
-                                {user.points || 0} Dev Points
-                            </span>
+                                <p className="text-muted-foreground text-base leading-relaxed">
+                                    {user.bio || "Passionate developer building amazing things. Welcome to my profile!"}
+                                </p>
+                            </div>
+
+                            {/* Right Progress Ring Column */}
+                            <div className="flex justify-center md:justify-end w-full">
+                                <div className={styles.ringWrapper}>
+                                    <div className={styles.progressContainer}>
+                                        {/* Glowing SVG Filter and Gradient */}
+                                        <svg className={styles.svgRing} width="140" height="140">
+                                            <defs>
+                                                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                    <stop offset="0%" stopColor="#00bfbf" />
+                                                    <stop offset="100%" stopColor="#8b5cf6" />
+                                                </linearGradient>
+                                            </defs>
+                                            
+                                            {/* Background Track Circle */}
+                                            <circle 
+                                                className={styles.circleBg}
+                                                cx="70" 
+                                                cy="70" 
+                                                r="60" 
+                                            />
+                                            
+                                            {/* Active Animated Progress Circle */}
+                                            <circle 
+                                                className={styles.circleProgress}
+                                                cx="70" 
+                                                cy="70" 
+                                                r="60" 
+                                                stroke="url(#progressGradient)"
+                                                strokeDasharray="376.99"
+                                                strokeDashoffset={376.99 * (1 - mountedProgress / 100)}
+                                            />
+                                        </svg>
+                                        
+                                        {/* Content inside the Ring */}
+                                        <div className={styles.centerText}>
+                                            {calculateLevel(user.points || 0).currentLevel.name === 'Sanrakshak' ? (
+                                                <div className="flex flex-col items-center">
+                                                    <Trophy className="text-yellow-500 h-8 w-8 animate-bounce" />
+                                                    <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest mt-1">MAX</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className={styles.percentText}>
+                                                        {Math.round(calculateLevel(user.points || 0).progress)}%
+                                                    </span>
+                                                    <span className={styles.lvlText}>
+                                                        Progress
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Sub-label under the Ring */}
+                                    <div className="text-center">
+                                        <p className="text-xs font-bold text-foreground mb-0.5">
+                                            {calculateLevel(user.points || 0).currentLevel.name === 'Sanrakshak' ? 'Sanrakshak Rank' : `Level Progress`}
+                                        </p>
+                                        <p className={styles.xpDetails}>
+                                            {calculateLevel(user.points || 0).currentLevel.name === 'Sanrakshak' 
+                                                ? `${(user.points || 0).toLocaleString()} XP`
+                                                : `${(user.points || 0).toLocaleString()} / ${(calculateLevel(user.points || 0).nextLevelPoints).toLocaleString()} XP`
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-
-                        <p className="text-muted-foreground max-w-2xl">
-                            {user.bio || "Passionate developer building amazing things. Welcome to my profile!"}
-                        </p>
                     </div>
 
                     {/* Login Heatmap */}
@@ -418,135 +592,7 @@ export default function UserProfile() {
 
                     {/* GitHub Stats Section */}
                     {user.githubStats?.connected && (
-                        <div className="bg-card border border-border rounded-xl p-6">
-                            <h3 className="text-xl font-bold flex items-center gap-2 mb-4">
-                                <Github className="text-primary" size={20} /> GitHub Activity
-                            </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
-                                    <BookOpen className="mb-2 text-primary h-6 w-6" />
-                                    <span className="text-2xl font-bold">{user.githubStats.repos || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Repositories</span>
-                                </div>
-                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
-                                    <Star className="mb-2 text-yellow-500 h-6 w-6" />
-                                    <span className="text-2xl font-bold">{user.githubStats.totalStars || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Stars</span>
-                                </div>
-                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
-                                    <Users className="mb-2 text-blue-500 h-6 w-6" />
-                                    <span className="text-2xl font-bold">{user.githubStats.followers || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Followers</span>
-                                </div>
-                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
-                                    <GitMerge className="mb-2 text-purple-500 h-6 w-6" />
-                                    <span className="text-2xl font-bold">{user.githubStats.following || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Following</span>
-                                </div>
-                            </div>
-
-                            {/* GitHub Readme Stats & Streak */}
-                            {user.githubStats.username && (
-                                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="w-full">
-                                        <picture>
-                                            <source media="(prefers-color-scheme: dark)" srcSet={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=00bfbf&icon_color=00bfbf&text_color=c9d1d9&bg_color=0d1117&rank_icon=github&border_radius=20&hide_border=true`} />
-                                            <source media="(prefers-color-scheme: light)" srcSet={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=000000&icon_color=000000&text_color=000000&bg_color=ffffff&rank_icon=github&border_radius=20&hide_border=true`} />
-                                            <img alt="GitHub Stats" src={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=00bfbf&icon_color=00bfbf&text_color=c9d1d9&bg_color=0d1117&rank_icon=github&border_radius=20&hide_border=true`} className="w-full h-auto" />
-                                        </picture>
-                                    </div>
-                                    <div className="w-full">
-                                        <picture>
-                                            <source media="(prefers-color-scheme: dark)" srcSet={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=00bfbf&stroke=c9d1d9&background=0d1117&fire=00bfbf&currStreakNum=00bfbf&sideNums=00bfbf&datesside=00bfbf&Labelscurr=00bfbf&currStreakLabel=00bfbf&sideLabels=00bfbf&dates=c9d1d9&border=c9d1d9&hide_border=true`} />
-                                            <source media="(prefers-color-scheme: light)" srcSet={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=000000&stroke=000000&background=ffffff&fire=ff0000&currStreakNum=000000&sideNums=000000&datesside=000000&Labelscurr=000000&currStreakLabel=000000&sideLabels=000000&dates=000000&border=000000&hide_border=true`} />
-                                            <img alt="GitHub Streak Stats" src={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=00bfbf&stroke=c9d1d9&background=0d1117&fire=00bfbf&currStreakNum=00bfbf&sideNums=00bfbf&sideNums=00bfbf&datesside=00bfbf&Labelscurr=00bfbf&currStreakLabel=00bfbf&sideLabels=00bfbf&dates=c9d1d9&border=c9d1d9&hide_border=true`} className="w-full h-auto" />
-                                        </picture>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Profile Details & Languages */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                                {/* Details */}
-                                <div className="space-y-3 text-sm">
-                                    {user.githubStats.bio && (
-                                        <p className="text-muted-foreground italic">"{user.githubStats.bio}"</p>
-                                    )}
-                                    <div className="flex flex-wrap gap-4">
-                                        {user.githubStats.company && (
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <Users size={14} /> {user.githubStats.company}
-                                            </div>
-                                        )}
-                                        {user.githubStats.location && (
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <MapPin size={14} /> {user.githubStats.location}
-                                            </div>
-                                        )}
-                                        {user.githubStats.createdAt && (
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <Calendar size={14} /> Joined {new Date(user.githubStats.createdAt).getFullYear()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Top Languages */}
-                                {user.githubStats.topLanguages && user.githubStats.topLanguages.length > 0 && (
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Top Languages</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                            {user.githubStats.topLanguages.map((lang) => (
-                                                <div key={lang.language} className="flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-xs font-medium">
-                                                    <span className={`w-2 h-2 rounded-full ${lang.language === 'TypeScript' ? 'bg-blue-500' :
-                                                        lang.language === 'JavaScript' ? 'bg-yellow-400' :
-                                                            lang.language === 'Python' ? 'bg-green-500' :
-                                                                lang.language === 'HTML' ? 'bg-orange-500' :
-                                                                    lang.language === 'CSS' ? 'bg-blue-400' :
-                                                                        'bg-gray-400'
-                                                        }`}></span>
-                                                    {lang.language}
-                                                    <span className="text-muted-foreground ml-1">({lang.count})</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {user.githubStats.recentActivity && user.githubStats.recentActivity.length > 0 && (
-                                <div className="mt-6 pt-6 border-t border-border">
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Recent Contributions</h4>
-                                    <div className="space-y-3">
-                                        {user.githubStats.recentActivity.map((event) => (
-                                            <div key={event.id} className="flex items-start gap-3 text-sm">
-                                                <div className="mt-1 min-w-[24px]">
-                                                    {event.type === 'PushEvent' && <GitMerge size={16} className="text-blue-500" />}
-                                                    {event.type === 'CreateEvent' && <Plus size={16} className="text-green-500" />}
-                                                    {event.type === 'WatchEvent' && <Star size={16} className="text-yellow-500" />}
-                                                    {event.type === 'PullRequestEvent' && <GitMerge size={16} className="text-purple-500" />}
-                                                    {!['PushEvent', 'CreateEvent', 'WatchEvent', 'PullRequestEvent'].includes(event.type) && <Github size={16} className="text-muted-foreground" />}
-                                                </div>
-                                                <div>
-                                                    <p className="text-foreground">
-                                                        <span className="font-medium">
-                                                            {event.type.replace('Event', '').replace(/([A-Z])/g, ' $1').trim()}
-                                                        </span>
-                                                        {' '}on{' '}
-                                                        <a href={event.repo.url} target="_blank" className="text-primary hover:underline font-medium">
-                                                            {event.repo.name}
-                                                        </a>
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {new Date(event.created_at).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <GithubStats user={user} />
                     )}
 
                     {/* About Me & Tech Stack */}
@@ -556,7 +602,7 @@ export default function UserProfile() {
                                 <Star className="text-yellow-500" size={20} /> About Me
                             </h3>
                             {!isEditingAbout && (
-                                <button onClick={() => setIsEditingAbout(true)} className="text-sm text-primary hover:underline">
+                                <button aria-label="Action button" onClick={() => setIsEditingAbout(true)} className="text-sm text-primary hover:underline">
                                     <Edit3 size={16} />
                                 </button>
                             )}
@@ -565,8 +611,8 @@ export default function UserProfile() {
                         {isEditingAbout ? (
                             <div className="space-y-4">
                                 <div className="flex bg-muted rounded-lg p-1 w-fit">
-                                    <button onClick={() => setAboutTab('write')} className={`px-3 py-1 text-sm rounded-md ${aboutTab === 'write' ? 'bg-background shadow-sm' : ''}`}>Write</button>
-                                    <button onClick={() => setAboutTab('preview')} className={`px-3 py-1 text-sm rounded-md ${aboutTab === 'preview' ? 'bg-background shadow-sm' : ''}`}>Preview</button>
+                                    <button aria-label="Action button" onClick={() => setAboutTab('write')} className={`px-3 py-1 text-sm rounded-md ${aboutTab === 'write' ? 'bg-background shadow-sm' : ''}`}>Write</button>
+                                    <button aria-label="Action button" onClick={() => setAboutTab('preview')} className={`px-3 py-1 text-sm rounded-md ${aboutTab === 'preview' ? 'bg-background shadow-sm' : ''}`}>Preview</button>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -611,30 +657,38 @@ export default function UserProfile() {
                                     </div>
                                 </div>
                                 {aboutTab === 'write' ? (
-                                    <textarea
-                                        value={aboutContent}
-                                        onChange={(e) => setAboutContent(e.target.value)}
-                                        className="w-full min-h-[300px] p-4 bg-background border border-border rounded-lg font-mono text-sm"
-                                        placeholder="Markdown supported..."
-                                        name="aboutContent"
-                                        id="aboutContent"
-                                    />
+                                    <div>
+                                        <textarea
+                                            value={aboutContent}
+                                            onChange={(e) => setAboutContent(e.target.value)}
+                                            maxLength={500}
+                                            className="w-full min-h-[300px] p-4 bg-background border border-border rounded-lg font-mono text-sm"
+                                            placeholder="Markdown supported..."
+                                            name="aboutContent"
+                                            id="aboutContent"
+                                        />
+                                        <p className={`text-xs text-right mt-1 ${aboutContent.length >= 480 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                            {500 - aboutContent.length} / 500 characters remaining
+                                        </p>
+                                    </div>
                                 ) : (
                                     <div className="min-h-[300px] p-4 bg-background border border-border rounded-lg">
                                         <div className="markdown-body">
-                                            <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>{aboutContent}</ReactMarkdown>
+                                            <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
+                                                {DOMPurify.sanitize(aboutContent)}
+                                            </ReactMarkdown>
                                         </div>
                                     </div>
                                 )}
                                 <div className="flex justify-end gap-2">
-                                    <button onClick={() => setIsEditingAbout(false)} className="px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
-                                    <button onClick={handleSaveAbout} disabled={isSaving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg">Save</button>
+                                    <button aria-label="Action button" onClick={() => setIsEditingAbout(false)} className="px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
+                                    <button aria-label="Action button" onClick={handleSaveAbout} disabled={isSaving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg">Save</button>
                                 </div>
                             </div>
                         ) : (
                             <div className="markdown-body">
                                 <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                                    {user.aboutMarkdown || "No description provided yet."}
+                                    {DOMPurify.sanitize(user.aboutMarkdown || "No description provided yet.")}
                                 </ReactMarkdown>
                             </div>
                         )}
@@ -648,6 +702,16 @@ export default function UserProfile() {
                     {/* GitHub Stats & Achievements Component */}
                     <Achievements />
 
+                    {/* Dev Profile Share Card */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-5">
+                            <Share2 size={18} className="text-primary" />
+                            <h3 className="text-xl font-bold">Your Dev Card</h3>
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold ml-1">New</span>
+                        </div>
+                        <DevCard user={user} />
+                    </div>
+
 
 
 
@@ -658,7 +722,7 @@ export default function UserProfile() {
                             <h3 className="text-xl font-bold flex items-center gap-2">
                                 <Flame className="text-orange-500" size={20} /> Projects
                             </h3>
-                            <button
+                            <button aria-label="Action button"
                                 onClick={() => {
                                     setProjectToEdit(null);
                                     setShowProjectModal(true);
@@ -718,7 +782,7 @@ export default function UserProfile() {
                     <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold">Privacy Settings</h3>
-                            <button onClick={() => setShowPrivacyModal(false)}><X size={24} /></button>
+                            <button aria-label="Action button" onClick={() => setShowPrivacyModal(false)}><X size={24} /></button>
                         </div>
                         <div className="space-y-4">
                             {['showMobile', 'showLocation', 'showEmail', 'showProjects', 'showRewards', 'isPublic', 'showInCommunity'].map((setting) => (
@@ -739,33 +803,86 @@ export default function UserProfile() {
                 </div>
             )}
 
-            {/* Followers/Following Modal */}
-            {(showFollowersModal || showFollowingModal) && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4">
-                    <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col">
+            {/* Followers Modal */}
+            {showFollowersModal && (
+                <div 
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4"
+                    onClick={closeFollowersModal}
+                >
+                    <div 
+                        className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex justify-between items-center mb-4 border-b border-border pb-4">
-                            <h3 className="text-xl font-bold">{showFollowersModal ? 'Followers' : 'Following'}</h3>
-                            <button onClick={() => { setShowFollowersModal(false); setShowFollowingModal(false); }}><X size={24} /></button>
+                            <h3 className="text-xl font-bold">Followers</h3>
+                            <button aria-label="Action button" onClick={closeFollowersModal}><X size={24} /></button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-4 min-h-[200px]">
-                            {loadingModalUsers ? (
+                            {isLoadingFollowers ? (
                                 <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>
-                            ) : modalUsers.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">No users found.</div>
+                            ) : followersList.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">No followers yet.</div>
                             ) : (
-                                modalUsers.map(u => (
+                                followersList.map(u => (
                                     <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors">
-                                        <img
-                                            src={u.photoURL || `https://ui-avatars.com/api/?name=${u.name}&background=random`}
+                                        <Image
+                                            src={u.photoURL || `${AVATAR_FALLBACK}/?name=${u.name}&background=random`}
                                             alt={u.name}
+                                            width={40}
+                                            height={40}
                                             className="w-10 h-10 rounded-full object-cover"
                                         />
                                         <div className="flex-1 overflow-hidden">
                                             <h4 className="font-bold truncate">{u.name}</h4>
                                             <p className="text-xs text-muted-foreground truncate">@{u.email?.split('@')[0]}</p>
                                         </div>
-                                        <a href={`/u?uid=${u.uid}`} className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full hover:bg-primary/20">
+                                        <a aria-label="View user profile" href={`/u?uid=${u.uid}`} className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full hover:bg-primary/20">
+                                            View
+                                        </a>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Following Modal */}
+            {showFollowingModal && (
+                <div 
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] p-4"
+                    onClick={closeFollowingModal}
+                >
+                    <div 
+                        className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center mb-4 border-b border-border pb-4">
+                            <h3 className="text-xl font-bold">Following</h3>
+                            <button aria-label="Action button" onClick={closeFollowingModal}><X size={24} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 min-h-[200px]">
+                            {isLoadingFollowing ? (
+                                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>
+                            ) : followingList.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">Not following anyone yet.</div>
+                            ) : (
+                                followingList.map(u => (
+                                    <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors">
+                                        <Image
+                                            src={u.photoURL || `${AVATAR_FALLBACK}/?name=${u.name}&background=random`}
+                                            alt={u.name}
+                                            width={40}
+                                            height={40}
+                                            className="w-10 h-10 rounded-full object-cover"
+                                        />
+                                        <div className="flex-1 overflow-hidden">
+                                            <h4 className="font-bold truncate">{u.name}</h4>
+                                            <p className="text-xs text-muted-foreground truncate">@{u.email?.split('@')[0]}</p>
+                                        </div>
+                                        <a aria-label="View user profile" href={`/u/${u.uid}`} className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full hover:bg-primary/20">
                                             View
                                         </a>
                                     </div>
@@ -788,7 +905,7 @@ export default function UserProfile() {
                     >
                         <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-border bg-card/95 backdrop-blur">
                             <h2 className="text-xl font-bold truncate pr-4">{selectedProject.title}</h2>
-                            <button
+                            <button aria-label="Action button"
                                 onClick={() => setSelectedProject(null)}
                                 className="p-2 hover:bg-muted rounded-full transition-colors"
                             >
@@ -807,18 +924,19 @@ export default function UserProfile() {
                                     />
                                 </div>
                             ) : selectedProject.screenshots && selectedProject.screenshots.length > 0 && (
-                                <div className="aspect-video rounded-xl overflow-hidden bg-muted">
-                                    <img
+                                <div className="aspect-video rounded-xl overflow-hidden bg-muted relative">
+                                    <Image
                                         src={selectedProject.screenshots[0]}
                                         alt={selectedProject.title}
-                                        className="w-full h-full object-contain"
+                                        fill
+                                        className="object-contain"
                                     />
                                 </div>
                             )}
 
                             {/* Description */}
                             <div className="prose dark:prose-invert max-w-none">
-                                <div dangerouslySetInnerHTML={{ __html: selectedProject.description }} />
+                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedProject.description) }} />
                             </div>
 
                             {/* Links & Skills */}

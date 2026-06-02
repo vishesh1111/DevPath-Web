@@ -1,17 +1,24 @@
 "use client";
-
+const STATS_URL = process.env.NEXT_PUBLIC_GITHUB_STATS_URL ?? 'https://github-readme-stats-salesp07.vercel.app';
+const STREAK_URL = process.env.NEXT_PUBLIC_GITHUB_STREAK_URL ?? 'https://github-readme-streak-stats-salesp07.vercel.app';
 import { useEffect, useState, Suspense } from 'react';
+import Image from 'next/image';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getEmbedUrl } from '@/lib/utils';
 import { teamMembers } from '@/data/team';
-import { Trophy, Flame, Star, Target, MapPin, Link as LinkIcon, Calendar, Phone, Github, Instagram, Linkedin, CheckCircle, User as UserIcon, Heart, Share2, Video, Image as ImageIcon, Globe, Check, Users, Shield, X, GitMerge, BookOpen, Plus } from 'lucide-react';
+import { Trophy, Flame, Star, Target, MapPin, Link as LinkIcon, Calendar, Phone, Github, Instagram, Linkedin, CheckCircle, User as UserIcon, Heart, Share2, Video, Image as ImageIcon, Globe, Check, Users, Shield, X, GitMerge, BookOpen, Plus, Code2 } from 'lucide-react';
 import styles from '@/components/profile/Profile.module.css';
 import Rewards from '@/components/profile/Rewards';
 import FollowButton from '@/components/profile/FollowButton';
 import LoginHeatmap from '@/components/profile/LoginHeatmap';
-import { useSearchParams } from 'next/navigation';
+import DOMPurify from 'dompurify';
+import { useSearchParams, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { GIT_FALLBACK_STATS } from '@/lib/github';
+import { getSafeSocialUrl } from '@/lib/safe-social-url';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useNotification } from '@/context/NotificationContext';
 
 interface PublicUser {
     id?: string;
@@ -58,6 +65,10 @@ interface PublicUser {
         location?: string;
         createdAt?: string;
         recentActivity?: any[];
+        linesAdded?: number;
+        linesRemoved?: number;
+        linesContributed?: number;
+        contributions?: number;
     };
 }
 
@@ -73,10 +84,9 @@ interface Project {
     createdAt: any;
 }
 
-function ProfileContent() {
-    const searchParams = useSearchParams();
+function ProfileContent({ uid }: { uid?: string }) {
     const { user: currentUser } = useAuth();
-    const [uid, setUid] = useState<string | null>(null);
+    const { showSuccess, showError } = useNotification();
     const [user, setUser] = useState<PublicUser | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
@@ -92,28 +102,37 @@ function ProfileContent() {
     };
 
     useEffect(() => {
-        const paramUid = searchParams.get('uid');
-        if (paramUid) {
-            setUid(paramUid);
-        }
-    }, [searchParams]);
-
-    useEffect(() => {
         const fetchUserAndProjects = async () => {
-            if (!uid) return;
+            // Extract uid from URL if not provided via prop
+            let currentUid = uid;
+            if (!currentUid) {
+                const parts = window.location.pathname.split('/');
+                currentUid = parts[parts.length - 1];
+            }
+
+            if (!currentUid || currentUid === 'u') {
+                setError('No user specified.');
+                setLoading(false);
+                return;
+            }
+            if (currentUid.length < 3 || currentUid.length > 128 || /[<>"']/.test(currentUid)) {
+                setError('Invalid user identifier.');
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             setError('');
 
             try {
                 let userData: PublicUser | undefined;
-                let userId = uid;
+                let userId = currentUid;
 
                 // 1. Try fetching by Document ID from 'members'
-                let userDoc = await getDoc(doc(db, 'members', uid));
+                let userDoc = await getDoc(doc(db, 'members', currentUid));
 
                 // 2. If not found, try fetching by 'uid' field query in 'members'
                 if (!userDoc.exists()) {
-                    const q = query(collection(db, 'members'), where('uid', '==', uid));
+                    const q = query(collection(db, 'members'), where('uid', '==', currentUid));
                     const querySnapshot = await getDocs(q);
                     if (!querySnapshot.empty) {
                         userDoc = querySnapshot.docs[0];
@@ -125,11 +144,11 @@ function ProfileContent() {
 
                 // 3. If still not found, try 'admins' collection
                 if (!userDoc.exists()) {
-                    userDoc = await getDoc(doc(db, 'admins', uid));
+                    userDoc = await getDoc(doc(db, 'admins', currentUid));
                     if (userDoc.exists()) {
                         isFromAdminCollection = true;
                     } else {
-                        const q = query(collection(db, 'admins'), where('uid', '==', uid));
+                        const q = query(collection(db, 'admins'), where('uid', '==', currentUid));
                         const querySnapshot = await getDocs(q);
                         if (!querySnapshot.empty) {
                             userDoc = querySnapshot.docs[0];
@@ -164,7 +183,7 @@ function ProfileContent() {
                         }
                         // 2. Try by UID field in admins collection (fallback)
                         if (userData.role !== 'admin') {
-                            const q = query(collection(db, 'admins'), where('uid', '==', uid));
+                            const q = query(collection(db, 'admins'), where('uid', '==', currentUid));
                             const querySnapshot = await getDocs(q);
                             if (!querySnapshot.empty) {
                                 userData.role = 'admin';
@@ -282,14 +301,25 @@ function ProfileContent() {
         fetchUserAndProjects();
     }, [uid]);
 
+    useEffect(() => {
+        if (!uid) return;
+        const link = document.createElement('link');
+        link.rel = 'canonical';
+        link.href = `${window.location.origin}/u/${uid}`;
+        document.head.appendChild(link);
+        return () => { link.remove(); };
+    }, [uid]);
+
     const handleShareProfile = async () => {
-        const profileUrl = window.location.href;
-        try {
-            await navigator.clipboard.writeText(profileUrl);
+        const profileUrl = `${window.location.origin}/u/${uid}`;
+        const copiedSuccessfully = await copyToClipboard(profileUrl);
+
+        if (copiedSuccessfully) {
             setCopied(true);
             setTimeout(() => setCopied(false), 3000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
+            showSuccess('Profile link copied to clipboard.');
+        } else {
+            showError('Copying the profile link is not supported in this browser.');
         }
     };
 
@@ -326,8 +356,13 @@ function ProfileContent() {
 
     const handleShareProject = (projectId: string) => {
         const url = window.location.href;
-        navigator.clipboard.writeText(url);
-        alert("Profile link copied!");
+        copyToClipboard(url).then((copiedSuccessfully) => {
+            if (copiedSuccessfully) {
+                showSuccess('Project link copied to clipboard.');
+            } else {
+                showError('Copying the project link is not supported in this browser.');
+            }
+        });
     };
 
     // Helper to safely format date
@@ -358,6 +393,11 @@ function ProfileContent() {
 
     const showMobile = user.privacySettings?.showMobile;
     const showLocation = user.privacySettings?.showLocation ?? true;
+    const safeSocialLinks = {
+        github: getSafeSocialUrl(user.github, 'github'),
+        linkedin: getSafeSocialUrl(user.linkedin, 'linkedin'),
+        instagram: getSafeSocialUrl(user.instagram, 'instagram')
+    };
 
     return (
         <section className={styles.profile}>
@@ -365,9 +405,9 @@ function ProfileContent() {
                 <div className={styles.header}>
                     <div className={styles.cover} />
                     <div className={styles.userInfo}>
-                        <div className={styles.avatar}>
+                        <div className={`${styles.avatar} relative overflow-hidden`}>
                             {user.photoURL ? (
-                                <img src={user.photoURL} alt={user.name || 'User'} className="w-full h-full object-cover rounded-full" />
+                                <Image src={user.photoURL} alt={user.name || 'User'} fill className="object-cover rounded-full" />
                             ) : (
                                 <div className="w-full h-full bg-primary/10 flex items-center justify-center text-primary text-4xl font-bold">
                                     {user.name?.charAt(0) || 'U'}
@@ -414,18 +454,18 @@ function ProfileContent() {
                             </div>
 
                             <div className="flex flex-wrap gap-3 mt-3">
-                                {user.github && (
-                                    <a href={user.github} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
+                                {safeSocialLinks.github && (
+                                    <a aria-label="Link"  href={safeSocialLinks.github} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
                                         <Github size={14} /> GitHub
                                     </a>
                                 )}
-                                {user.linkedin && (
-                                    <a href={user.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
+                                {safeSocialLinks.linkedin && (
+                                    <a aria-label="Link"  href={safeSocialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
                                         <Linkedin size={14} /> LinkedIn
                                     </a>
                                 )}
-                                {user.instagram && (
-                                    <a href={user.instagram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
+                                {safeSocialLinks.instagram && (
+                                    <a aria-label="Link"  href={safeSocialLinks.instagram} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm hover:text-primary transition-colors">
                                         <Instagram size={14} /> Instagram
                                     </a>
                                 )}
@@ -433,7 +473,7 @@ function ProfileContent() {
 
                             <div className="flex flex-wrap gap-3 mt-4">
                                 {user.id && <FollowButton targetUserId={user.id} targetRole={user.role} targetEmail={user.email} />}
-                                <button
+                                <button aria-label="Action button" 
                                     onClick={handleShareProfile}
                                     className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-all duration-200 font-medium text-sm"
                                 >
@@ -481,26 +521,36 @@ function ProfileContent() {
                             <h3 className="text-xl font-bold flex items-center gap-2 mb-4">
                                 <Github className="text-primary" size={20} /> GitHub Activity
                             </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                                 <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
                                     <Globe className="mb-2 text-primary h-6 w-6" />
                                     <span className="text-2xl font-bold">{user.githubStats.repos || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Repositories</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Repositories</span>
                                 </div>
                                 <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
                                     <Star className="mb-2 text-yellow-500 h-6 w-6" />
                                     <span className="text-2xl font-bold">{user.githubStats.totalStars || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Stars</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Total Stars</span>
                                 </div>
                                 <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
                                     <Users className="mb-2 text-blue-500 h-6 w-6" />
                                     <span className="text-2xl font-bold">{user.githubStats.followers || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Followers</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Followers</span>
                                 </div>
                                 <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
                                     <UserIcon className="mb-2 text-purple-500 h-6 w-6" />
                                     <span className="text-2xl font-bold">{user.githubStats.following || 0}</span>
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Following</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Following</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
+                                    <Code2 className="mb-2 text-emerald-500 h-6 w-6" />
+                                    <span className="text-2xl font-bold">{(user.githubStats.linesContributed ?? GIT_FALLBACK_STATS[(user.githubStats.username || '').toLowerCase()]?.additions ?? 0).toLocaleString()}</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Lines Contributed</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-muted/30 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
+                                    <GitMerge className="mb-2 text-orange-500 h-6 w-6" />
+                                    <span className="text-2xl font-bold">{user.githubStats.contributions ?? GIT_FALLBACK_STATS[(user.githubStats.username || '').toLowerCase()]?.commits ?? 0}</span>
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider text-center">Commits Contributed</span>
                                 </div>
                             </div>
 
@@ -508,18 +558,36 @@ function ProfileContent() {
                             {user.githubStats.username && (
                                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="w-full">
-                                        <picture>
-                                            <source media="(prefers-color-scheme: dark)" srcSet={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=00bfbf&icon_color=00bfbf&text_color=c9d1d9&bg_color=0d1117&rank_icon=github&border_radius=20&hide_border=true`} />
-                                            <source media="(prefers-color-scheme: light)" srcSet={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=000000&icon_color=000000&text_color=000000&bg_color=ffffff&rank_icon=github&border_radius=20&hide_border=true`} />
-                                            <img alt="GitHub Stats" src={`https://github-readme-stats-salesp07.vercel.app/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=00bfbf&icon_color=00bfbf&text_color=c9d1d9&bg_color=0d1117&rank_icon=github&border_radius=20&hide_border=true`} className="w-full h-auto" />
-                                        </picture>
+                                        <Image
+                                            alt={`${user.githubStats.username} GitHub profile stats in dark theme`}
+                                            src={`${STATS_URL}/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=00bfbf&icon_color=00bfbf&text_color=c9d1d9&bg_color=0d1117&rank_icon=github&border_radius=20&hide_border=true`}
+                                            width={467}
+                                            height={195}
+                                            className="w-full h-auto hidden dark:block"
+                                        />
+                                        <Image
+                                            alt={`${user.githubStats.username} GitHub profile stats in light theme`}
+                                            src={`${STATS_URL}/api?username=${user.githubStats.username}&count_private=true&show_icons=true&title_color=000000&icon_color=000000&text_color=000000&bg_color=ffffff&rank_icon=github&border_radius=20&hide_border=true`}
+                                            width={467}
+                                            height={195}
+                                            className="w-full h-auto dark:hidden"
+                                        />
                                     </div>
                                     <div className="w-full">
-                                        <picture>
-                                            <source media="(prefers-color-scheme: dark)" srcSet={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=00bfbf&stroke=c9d1d9&background=0d1117&fire=00bfbf&currStreakNum=00bfbf&sideNums=00bfbf&datesside=00bfbf&Labelscurr=00bfbf&currStreakLabel=00bfbf&sideLabels=00bfbf&dates=c9d1d9&border=c9d1d9&hide_border=true`} />
-                                            <source media="(prefers-color-scheme: light)" srcSet={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=000000&stroke=000000&background=ffffff&fire=ff0000&currStreakNum=000000&sideNums=000000&datesside=000000&Labelscurr=000000&currStreakLabel=000000&sideLabels=000000&dates=000000&border=000000&hide_border=true`} />
-                                            <img alt="GitHub Streak Stats" src={`https://github-readme-streak-stats-salesp07.vercel.app/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=00bfbf&stroke=c9d1d9&background=0d1117&fire=00bfbf&currStreakNum=00bfbf&sideNums=00bfbf&sideNums=00bfbf&datesside=00bfbf&Labelscurr=00bfbf&currStreakLabel=00bfbf&sideLabels=00bfbf&dates=c9d1d9&border=c9d1d9&hide_border=true`} className="w-full h-auto" />
-                                        </picture>
+                                        <Image
+                                            alt={`${user.githubStats.username} GitHub contribution streak in dark theme`}
+                                            src={`${STREAK_URL}/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=00bfbf&stroke=c9d1d9&background=0d1117&fire=00bfbf&currStreakNum=00bfbf&sideNums=00bfbf&datesside=00bfbf&Labelscurr=00bfbf&currStreakLabel=00bfbf&sideLabels=00bfbf&dates=c9d1d9&border=c9d1d9&hide_border=true`}
+                                            width={467}
+                                            height={195}
+                                            className="w-full h-auto hidden dark:block"
+                                        />
+                                        <Image
+                                            alt={`${user.githubStats.username} GitHub contribution streak in light theme`}
+                                            src={`${STREAK_URL}/?user=${user.githubStats.username}&count_private=true&border_radius=20&ring=000000&stroke=000000&background=ffffff&fire=ff0000&currStreakNum=000000&sideNums=000000&datesside=000000&Labelscurr=000000&currStreakLabel=000000&sideLabels=000000&dates=000000&border=000000&hide_border=true`}
+                                            width={467}
+                                            height={195}
+                                            className="w-full h-auto dark:hidden"
+                                        />
                                     </div>
                                 </div>
                             )}
@@ -544,7 +612,7 @@ function ProfileContent() {
                                                             {event.type.replace('Event', '').replace(/([A-Z])/g, ' $1').trim()}
                                                         </span>
                                                         {' '}on{' '}
-                                                        <a href={event.repo.url} target="_blank" className="text-primary hover:underline font-medium">
+                                                        <a aria-label="Link"  href={event.repo.url} target="_blank" className="text-primary hover:underline font-medium">
                                                             {event.repo.name}
                                                         </a>
                                                     </p>
@@ -639,7 +707,7 @@ function ProfileContent() {
                                     <div className="aspect-video bg-muted relative group overflow-hidden">
                                         {project.videoUrl ? (
                                             <div className="w-full h-full flex items-center justify-center bg-black/5">
-                                                <a
+                                                <a aria-label="Link" 
                                                     href={project.videoUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
@@ -654,10 +722,11 @@ function ProfileContent() {
                                         ) : (
                                             <>
                                                 {project.screenshots.length > 0 ? (
-                                                    <img
+                                                    <Image
                                                         src={project.screenshots[0]}
                                                         alt={project.title}
-                                                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                                        fill
+                                                        className="object-cover transition-transform group-hover:scale-105"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -678,7 +747,7 @@ function ProfileContent() {
                                             <h3 className="font-bold text-lg line-clamp-1" title={project.title}>{project.title}</h3>
                                             <div className="flex gap-1">
                                                 {project.websiteUrl && (
-                                                    <a
+                                                    <a aria-label="Link" 
                                                         href={project.websiteUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
@@ -693,9 +762,9 @@ function ProfileContent() {
 
                                         <div className="text-sm text-muted-foreground mb-3">
                                             <p className="line-clamp-2">{stripHtml(project.description)}</p>
-                                            <button
+                                            <button aria-label="Action button" 
                                                 onClick={() => setSelectedProject(project)}
-                                                className="text-primary text-xs font-medium hover:underline mt-1"
+                                                className="text-primary text-xs font-medium hover:underline hover:opacity-80 transition-all duration-200 mt-1"
                                             >
                                                 Read More
                                             </button>
@@ -718,14 +787,14 @@ function ProfileContent() {
 
                                         <div className="flex items-center justify-between pt-3 border-t border-border">
                                             <div className="flex items-center gap-4">
-                                                <button
+                                                <button aria-label="Action button" 
                                                     onClick={() => handleLikeProject(project.id, project.likes)}
-                                                    className={`flex items-center gap-1.5 text-sm transition-colors ${currentUser && project.likes.includes(currentUser.uid) ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'}`}
+                                                    className={`flex items-center gap-1.5 text-sm transition-all duration-200 ${currentUser && project.likes.includes(currentUser.uid) ? 'text-red-500' : 'text-muted-foreground hover:text-red-500 hover:scale-105'}`}
                                                 >
                                                     <Heart size={16} fill={currentUser && project.likes.includes(currentUser.uid) ? "currentColor" : "none"} />
                                                     <span>{project.likes.length}</span>
                                                 </button>
-                                                <button
+                                                <button aria-label="Action button" 
                                                     onClick={() => handleShareProject(project.id)}
                                                     className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
                                                 >
@@ -748,7 +817,7 @@ function ProfileContent() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {user.achievements && user.achievements.length > 0 ? (
                                 user.achievements.map((badgeId, index) => (
-                                    <div key={index} className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl">
+                                    <div key={index}  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary hover:scale-105 transition-all duration-200">
                                         <div className="p-3 bg-primary/10 text-primary rounded-full">
                                             <Trophy size={24} />
                                         </div>
@@ -788,9 +857,9 @@ function ProfileContent() {
                         >
                             <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-border bg-card/95 backdrop-blur">
                                 <h2 className="text-xl font-bold truncate pr-4">{selectedProject.title}</h2>
-                                <button
+                                <button aria-label="Action button" 
                                     onClick={() => setSelectedProject(null)}
-                                    className="p-2 hover:bg-muted rounded-full transition-colors"
+                                    className="p-2 hover:bg-muted hover:scale-110 rounded-full transition-all duration-200"
                                 >
                                     <X size={20} />
                                 </button>
@@ -807,28 +876,29 @@ function ProfileContent() {
                                         />
                                     </div>
                                 ) : selectedProject.screenshots.length > 0 && (
-                                    <div className="aspect-video rounded-xl overflow-hidden bg-muted">
-                                        <img
+                                    <div className="aspect-video rounded-xl overflow-hidden bg-muted relative">
+                                        <Image
                                             src={selectedProject.screenshots[0]}
                                             alt={selectedProject.title}
-                                            className="w-full h-full object-contain"
+                                            fill
+                                            className="object-contain"
                                         />
                                     </div>
                                 )}
 
                                 {/* Description */}
                                 <div className="prose dark:prose-invert max-w-none">
-                                    <div dangerouslySetInnerHTML={{ __html: selectedProject.description }} />
+                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedProject.description) }} />
                                 </div>
 
                                 {/* Links & Skills */}
                                 <div className="flex flex-wrap gap-4 pt-4 border-t border-border">
                                     {selectedProject.websiteUrl && (
-                                        <a
+                                        <a aria-label="Link" 
                                             href={selectedProject.websiteUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                                            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 hover:scale-105 hover:shadow-md transition-all duration-200 font-medium text-sm"
                                         >
                                             <Globe size={16} /> Visit Website
                                         </a>
@@ -850,10 +920,49 @@ function ProfileContent() {
     );
 }
 
-export default function ProfileClient() {
+function isValidUid(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 3 || trimmed.length > 128) return false;
+    if (/[<>"']/.test(trimmed)) return false;
+    return true;
+}
+
+function SearchParamsFallback() {
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const rawUid = searchParams.get('uid') || (pathname.startsWith('/u/') ? pathname.slice(3).split('/')[0].split('?')[0] : null);
+    const uid = rawUid?.trim() || null;
+
+    if (!uid) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+                <UserIcon size={64} className="text-muted-foreground mb-4" />
+                <h1 className="text-2xl font-bold mb-2">No User Specified</h1>
+                <p className="text-muted-foreground">Please provide a user ID to view a profile.</p>
+            </div>
+        );
+    }
+
+    if (!isValidUid(uid)) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+                <UserIcon size={64} className="text-muted-foreground mb-4" />
+                <h1 className="text-2xl font-bold mb-2">Invalid Profile</h1>
+                <p className="text-muted-foreground">The requested profile identifier is invalid.</p>
+            </div>
+        );
+    }
+
+    return <ProfileContent uid={uid} />;
+}
+
+export default function ProfileClient({ uid }: { uid?: string }) {
+    if (uid) {
+        return <ProfileContent uid={uid} />;
+    }
     return (
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
-            <ProfileContent />
+            <SearchParamsFallback />
         </Suspense>
     );
 }

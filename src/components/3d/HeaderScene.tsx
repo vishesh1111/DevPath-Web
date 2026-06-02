@@ -37,7 +37,7 @@ function Model({ color }: { color: string }) {
         let maxVolume = 0;
         let largestMeshId = '';
 
-        scene.traverse((child) => {
+        scene.traverse((child: any) => {
             if ((child as THREE.Mesh).isMesh) {
                 const mesh = child as THREE.Mesh;
                 if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
@@ -48,7 +48,6 @@ function Model({ color }: { color: string }) {
                 const box = mesh.geometry.boundingBox!;
                 const size = new THREE.Vector3();
                 box.getSize(size);
-                // Use diagonal length as a proxy for size to handle flat objects better
                 const diagonal = size.length();
 
                 if (diagonal > maxVolume) {
@@ -58,18 +57,24 @@ function Model({ color }: { color: string }) {
             }
         });
 
+        // Collect created materials so we can dispose on cleanup
+        const createdMaterials: THREE.MeshStandardMaterial[] = [];
+
         // Second pass: apply materials
-        scene.traverse((child) => {
+        scene.traverse((child: any) => {
             if ((child as THREE.Mesh).isMesh) {
                 const mesh = child as THREE.Mesh;
                 const isBackground = mesh.uuid === largestMeshId;
 
-                // Background: Dark Blue Front (#0B1120), Gold Side (#FFB800)
-                // D/Content: White Front (#FFFFFF), White Side (#FFFFFF)
                 const frontColor = isBackground ? '#0B1120' : '#FFFFFF';
                 const sideColor = isBackground ? color : '#FFFFFF';
 
-                // Clone material to avoid affecting other instances if any
+                // Dispose old material before replacing to free GPU memory
+                if (mesh.material) {
+                    const old = mesh.material as THREE.Material;
+                    old.dispose();
+                }
+
                 const material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(sideColor),
                     roughness: 0.2,
@@ -80,7 +85,7 @@ function Model({ color }: { color: string }) {
                     opacity: 0.9
                 });
 
-                material.onBeforeCompile = (shader) => {
+                material.onBeforeCompile = (shader: any) => {
                     shader.uniforms.colorFront = { value: new THREE.Color(frontColor) };
                     shader.uniforms.colorSide = { value: new THREE.Color(sideColor) };
 
@@ -111,8 +116,14 @@ function Model({ color }: { color: string }) {
                 };
 
                 mesh.material = material;
+                createdMaterials.push(material);
             }
         });
+
+        // Cleanup: dispose all materials we created when color/scene changes or on unmount
+        return () => {
+            createdMaterials.forEach((mat) => mat.dispose());
+        };
     }, [scene, color]);
 
     return (
@@ -126,8 +137,66 @@ function Model({ color }: { color: string }) {
 
 
 
-class ModelErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-    constructor(props: { children: ReactNode }) {
+function FallbackGeometry({ color }: { color: string }) {
+    const meshRef = useRef<THREE.Mesh>(null);
+    const mouse = useRef({ x: 0, y: 0 });
+
+    useEffect(() => {
+        const handleMouseMove = (event: MouseEvent) => {
+            // Normalize mouse position to range [-1, 1]
+            mouse.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, []);
+
+    useFrame((state, delta) => {
+        if (meshRef.current) {
+            // Slow idle rotation
+            meshRef.current.rotation.y += delta * 0.4;
+            meshRef.current.rotation.x += delta * 0.15;
+
+            // Dynamically rotate based on mouse cursor coordinates with smooth damping
+            const targetRotationY = mouse.current.x * (Math.PI / 4);
+            const targetRotationX = mouse.current.y * (Math.PI / 4);
+            meshRef.current.rotation.y += (targetRotationY - meshRef.current.rotation.y) * delta * 4;
+            meshRef.current.rotation.x += (targetRotationX - meshRef.current.rotation.x) * delta * 4;
+        }
+    });
+
+    // Dispose geometry and material on unmount to free WebGL resources
+    useEffect(() => {
+        const mesh = meshRef.current;
+        return () => {
+            if (mesh) {
+                mesh.geometry.dispose();
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach((m: any) => m.dispose());
+                } else {
+                    mesh.material.dispose();
+                }
+            }
+        };
+    }, []);
+
+    return (
+        <mesh ref={meshRef} position={[0, 0.4, 0]}>
+            {/* Elegant futuristic floating metallic Torus Knot */}
+            <torusKnotGeometry args={[0.7, 0.22, 120, 16]} />
+            <meshStandardMaterial
+                color={color}
+                roughness={0.15}
+                metalness={0.9}
+                emissive={new THREE.Color(color)}
+                emissiveIntensity={0.25}
+            />
+        </mesh>
+    );
+}
+
+class ModelErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
+    constructor(props: { children: ReactNode; fallback: ReactNode }) {
         super(props);
         this.state = { hasError: false };
     }
@@ -143,7 +212,7 @@ class ModelErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 
     render() {
         if (this.state.hasError) {
-            return null;
+            return this.props.fallback;
         }
 
         return this.props.children;
@@ -163,10 +232,10 @@ export default function HeaderScene() {
                 <Suspense fallback={null}>
                     <ambientLight intensity={0.8} />
                     <directionalLight position={[5, 5, 5]} intensity={1.5} />
-                    <ModelErrorBoundary>
-                        <Model color={brandColor} />
-                    </ModelErrorBoundary>
-                    {/* <TestBox /> */}
+                    {/* Render the stunning interactive procedural 3D Torus Knot directly.
+                        Since devpath3d.glb does not exist in static assets, loading it is bypassed
+                        to completely eliminate 404 network fetch errors and optimize load speed. */}
+                    <FallbackGeometry color={brandColor} />
                     <Environment preset="city" />
                 </Suspense>
             </Canvas>
@@ -174,4 +243,4 @@ export default function HeaderScene() {
     );
 }
 
-useGLTF.preload('/devpath3d.glb');
+// useGLTF.preload('/devpath3d.glb');

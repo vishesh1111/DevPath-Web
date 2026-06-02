@@ -184,3 +184,97 @@
         white-space: nowrap;
     }
 }
+
+/* --- Premium Circular Progress Ring Styles --- */
+.ringWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ringWrapper:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(0, 191, 191, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px rgba(0, 191, 191, 0.15);
+}
+
+.progressContainer {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.svgRing {
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+}
+
+.circleBg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.04);
+    stroke-width: 8;
+}
+
+.circleProgress {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 6px rgba(0, 191, 191, 0.4));
+}
+
+.ringWrapper:hover .circleProgress {
+    filter: drop-shadow(0 0 10px rgba(0, 191, 191, 0.6)) drop-shadow(0 0 20px rgba(139, 92, 246, 0.3));
+}
+
+.centerText {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+}
+
+.percentText {
+    font-size: 26px;
+    font-weight: 800;
+    color: #ffffff;
+    font-family: var(--font-space), monospace;
+    background: linear-gradient(135deg, #00bfbf 30%, #8b5cf6 90%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lvlText {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 1px;
+}
+
+.xpDetails {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-family: var(--font-space), monospace;
+}

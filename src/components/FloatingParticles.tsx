@@ -5,16 +5,16 @@ import { useState, useEffect } from "react"
 export function FloatingParticles() {
     const [mounted, setMounted] = useState(false)
     const [particles, setParticles] = useState<Array<{ symbol: string, delay: number, duration: number, x: number, y: number, initialX: number, initialY: number }>>([])
-    const [isMobile, setIsMobile] = useState(false)
+    // const [isMobile, setIsMobile] = useState(false)
     const shouldReduceMotion = useReducedMotion()
 
     useEffect(() => {
         setMounted(true)
 
-        // Check if mobile
-        const checkMobile = () => setIsMobile(window.innerWidth < 768)
-        checkMobile()
-        window.addEventListener('resize', checkMobile)
+        // // Check if mobile
+        // const checkMobile = () => setIsMobile(window.innerWidth < 768)
+        // checkMobile()
+        // // window.addEventListener('resize', checkMobile)
 
         const particleConfig = [
             { symbol: "</>", delay: 0, duration: 15, x: 100, y: -100 },
@@ -25,8 +25,10 @@ export function FloatingParticles() {
             { symbol: "&&", delay: 5, duration: 19, x: -120, y: -100 },
         ]
 
-        // Use fewer particles on mobile for performance
-        const configToUse = isMobile ? particleConfig.slice(0, 3) : particleConfig
+        const isMobileDevice = window.innerWidth < 768
+        const configToUse = isMobileDevice
+            ? particleConfig.slice(0, 3)
+            : particleConfig
 
         setParticles(configToUse.map(p => ({
             ...p,
@@ -34,8 +36,7 @@ export function FloatingParticles() {
             initialY: Math.random() * 100
         })))
 
-        return () => window.removeEventListener('resize', checkMobile)
-    }, [isMobile])
+    }, [])
 
     // Don't render if user prefers reduced motion or not mounted
     if (!mounted || shouldReduceMotion) return null

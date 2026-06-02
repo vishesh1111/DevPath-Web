@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Key, Lock, AlertCircle } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { secureFetch } from '@/lib/apiClient';  
 
 interface AdminKeyModalProps {
     isOpen: boolean;
@@ -11,51 +10,41 @@ interface AdminKeyModalProps {
     onCancel: () => void;
 }
 
-import { useAuth } from '@/context/AuthContext';
 export default function AdminKeyModal({ isOpen, onVerified, onCancel }: AdminKeyModalProps) {
     const { verifyAdmin } = useAuth();
     const [key, setKey] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [configKey, setConfigKey] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (isOpen) {
-            // Fetch the correct key from Firestore
-            const fetchKey = async () => {
-                try {
-                    const docRef = doc(db, 'admin_keys', 'config');
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setConfigKey(docSnap.data().value);
-                    } else {
-                        console.error('Admin key config not found');
-                        setError('System error: Could not verify key.');
-                    }
-                } catch (err) {
-                    console.error('Error fetching admin key:', err);
-                    setError('Network error. Please try again.');
-                }
-            };
-            fetchKey();
-        }
-    }, [isOpen]);
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
 
-        // Simulate a small delay for better UX
-        setTimeout(() => {
-            if (key === configKey) {
+        try {
+            // Sending key to the secure backend route instead of checking in browser
+            const response = await secureFetch('/api/auth/verify-admin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ key }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
                 verifyAdmin();
                 onVerified();
             } else {
-                setError('Invalid Admin Key. Please try again.');
-                setIsLoading(false);
+                setError(data.message || 'Invalid Admin Key. Please try again.');
             }
-        }, 800);
+        } catch (err) {
+            console.error('Verification error:', err);
+            setError('Network error. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -104,16 +93,16 @@ export default function AdminKeyModal({ isOpen, onVerified, onCancel }: AdminKey
                                 )}
 
                                 <div className="flex gap-3 mt-6">
-                                    <button
+                                    <button aria-label="Action button" 
                                         type="button"
                                         onClick={onCancel}
                                         className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
                                     >
                                         Cancel
                                     </button>
-                                    <button
+                                    <button aria-label="Action button" 
                                         type="submit"
-                                        disabled={isLoading || !configKey}
+                                        disabled={isLoading || !key}
                                         className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
                                         {isLoading ? (

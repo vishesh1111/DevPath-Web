@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, ExternalLink, Bookmark, Sparkles, Map, Code, BookOpen } from 'lucide-react';
-import { useBookmarks, BookmarkItem } from '@/hooks/useBookmarks';
+import { X, Trash2, ExternalLink, Bookmark, Sparkles, Map, Code } from 'lucide-react';
+import { useBookmarks } from '@/hooks/useBookmarks';
 import Link from 'next/link';
 
 interface BookmarkDrawerProps {
@@ -50,8 +50,10 @@ export default function BookmarkDrawer({ isOpen, onClose }: BookmarkDrawerProps)
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={onClose}
                                 className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors text-muted-foreground hover:text-foreground"
+                                aria-label="Close Saved Resources Drawer"
                             >
                                 <X size={20} />
                             </button>
@@ -106,9 +108,11 @@ export default function BookmarkDrawer({ isOpen, onClose }: BookmarkDrawerProps)
 
                                             <div className="flex flex-col gap-1 shrink-0">
                                                 <button
+                                                    type="button"
                                                     onClick={() => removeBookmark(item.id)}
                                                     className="p-1.5 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-lg transition-colors"
                                                     title="Remove Bookmark"
+                                                    aria-label={`Remove ${item.title} from bookmarks`}
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>

@@ -66,6 +66,12 @@
     color: var(--text-primary);
     letter-spacing: -0.5px;
     text-decoration: none;
+    border-radius: 8px;
+}
+
+.logo:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 4px;
 }
 
 .logoIcon {
@@ -94,6 +100,13 @@
 }
 
 .navLink:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.navLink:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
     color: #fff;
     background: rgba(255, 255, 255, 0.1);
 }
@@ -129,6 +142,11 @@
     transform: scale(1.05);
 }
 
+.iconButton:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 .profileButton {
     display: flex;
     align-items: center;
@@ -150,6 +168,11 @@
     transform: translateY(-1px);
 }
 
+.profileButton:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 /* Hamburger Menu Button - Hidden on Desktop */
 .hamburger {
     display: none;
@@ -168,6 +191,11 @@
 
 .hamburger:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+.hamburger:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
 }
 
 /* Mobile Menu Backdrop */
@@ -231,6 +259,11 @@
     color: var(--text-primary);
 }
 
+.mobileClose:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 .mobileNav {
     display: flex;
     flex-direction: column;
@@ -250,6 +283,13 @@
 
 .mobileLink:hover,
 .mobileLink:active {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.mobileLink:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
 }
@@ -290,6 +330,11 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
+.mobileProfileButton:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 .profileAvatar {
     display: flex;
     align-items: center;
@@ -312,6 +357,11 @@
     transform: translateY(-1px);
 }
 
+.profileAvatar:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 /* Mobile Responsive Styles */
 @media (max-width: 1024px) {
     .navPill {
@@ -321,7 +371,7 @@
     .navbar {
         padding: 0 16px;
         height: 60px;
-        background: rgba(15, 23, 42, 0.6);
+        background: rgba(15, 23, 42, 0.88);
         backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 20px;
@@ -365,4 +415,29 @@
     .navbar {
         padding: 0 12px;
     }
+}
+
+.navbar {
+    pointer-events: auto;
+    width: 100%;
+    max-width: 95vw;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+
+    padding: 0 24px;
+
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        0 2px 8px rgba(0, 0, 0, 0.2);
+
+    transition: all 0.3s ease;
 }

@@ -1,6 +1,8 @@
 "use client";
 
+import ReviewsSection from "./ReviewsSection";
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, orderBy, getDocs, limit, collectionGroup } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -9,6 +11,7 @@ import { getEmbedUrl } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import CreateDiscussionModal from '@/components/community/CreateDiscussionModal';
 import ProjectCard from '@/components/projects/ProjectCard';
+import DOMPurify from 'dompurify';
 
 export default function CommunityPage() {
     const { user } = useAuth();
@@ -68,7 +71,7 @@ export default function CommunityPage() {
 
                     <div className="flex items-center gap-3">
                         {activeTab === 'discussions' && (
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => {
                                     if (!user) {
                                         alert("Please login to start a discussion.");
@@ -86,7 +89,7 @@ export default function CommunityPage() {
 
                 {/* Tabs */}
                 <div className="flex border-b border-border mb-8">
-                    <button
+                    <button aria-label="Action button" 
                         onClick={() => setActiveTab('discussions')}
                         className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors ${activeTab === 'discussions'
                             ? 'border-primary text-primary font-medium'
@@ -95,7 +98,7 @@ export default function CommunityPage() {
                     >
                         <MessageSquare size={18} /> Discussions
                     </button>
-                    <button
+                    <button aria-label="Action button" 
                         onClick={() => setActiveTab('showcase')}
                         className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors ${activeTab === 'showcase'
                             ? 'border-primary text-primary font-medium'
@@ -110,13 +113,13 @@ export default function CommunityPage() {
                 {activeTab === 'showcase' && (
                     <div className="flex justify-end mb-6">
                         <div className="flex bg-muted rounded-lg p-1">
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => setSortOption('newest')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${sortOption === 'newest' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
                                 Newest
                             </button>
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => setSortOption('popular')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${sortOption === 'popular' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
@@ -130,13 +133,13 @@ export default function CommunityPage() {
                 {activeTab === 'showcase' && (
                     <div className="flex justify-end mb-6">
                         <div className="flex bg-muted rounded-lg p-1">
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => setSortOption('newest')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${sortOption === 'newest' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
                                 Newest
                             </button>
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => setSortOption('popular')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${sortOption === 'popular' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                             >
@@ -226,7 +229,7 @@ export default function CommunityPage() {
                     >
                         <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-border bg-card/95 backdrop-blur">
                             <h2 className="text-xl font-bold truncate pr-4">{selectedProject.title}</h2>
-                            <button
+                            <button aria-label="Action button" 
                                 onClick={() => setSelectedProject(null)}
                                 className="p-2 hover:bg-muted rounded-full transition-colors"
                             >
@@ -245,24 +248,25 @@ export default function CommunityPage() {
                                     />
                                 </div>
                             ) : selectedProject.screenshots && selectedProject.screenshots.length > 0 && (
-                                <div className="aspect-video rounded-xl overflow-hidden bg-muted">
-                                    <img
+                                <div className="aspect-video rounded-xl overflow-hidden bg-muted relative">
+                                    <Image
                                         src={selectedProject.screenshots[0]}
                                         alt={selectedProject.title}
-                                        className="w-full h-full object-contain"
+                                        fill
+                                        className="object-contain"
                                     />
                                 </div>
                             )}
 
                             {/* Description */}
                             <div className="prose dark:prose-invert max-w-none">
-                                <div dangerouslySetInnerHTML={{ __html: selectedProject.description }} />
+                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedProject.description) }} />
                             </div>
 
                             {/* Links & Skills */}
                             <div className="flex flex-wrap gap-4 pt-4 border-t border-border">
                                 {selectedProject.websiteUrl && (
-                                    <a
+                                    <a aria-label="Link" 
                                         href={selectedProject.websiteUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -283,6 +287,7 @@ export default function CommunityPage() {
                     </div>
                 </div>
             )}
+            <ReviewsSection />
         </div>
     );
 }

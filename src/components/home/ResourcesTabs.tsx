@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Video, Code, Terminal, Book, Star, Calendar, Brain, Briefcase, Users, Building2, MessageSquare, Map, GraduationCap, Layout, Rocket, Database } from 'lucide-react';
@@ -10,6 +10,13 @@ import { placementResources } from '@/data/placementResources';
 import { InternshipCalendarModal } from '../resources/InternshipCalendarModal';
 import { RoadmapModal } from '../resources/RoadmapModal';
 import { DeveloperMindsetModal } from '../resources/DeveloperMindsetModal';
+
+// --- FIREBASE IMPORTS ---
+import { collection, getDocs } from 'firebase/firestore';
+// TODO: Replace with your actual Firebase config import path
+import { db } from '@/lib/firebase'; 
+// TODO: Replace with your actual Auth hook/context
+import { useAuth } from '@/context/AuthContext'; 
 
 interface ResourceItem {
     title: string;
@@ -310,6 +317,9 @@ const categoryConfig: Record<string, { icon: any, color: string }> = {
 };
 
 export default function ResourcesTabs() {
+    // Custom Auth Fallback
+    const { user } = useAuth() || { user: { uid: 'test-user-id' } }; 
+
     // 5 Main Sections - Reordered: Roadmaps First
     const mainSections = [
         { id: 'roadmaps', label: 'Roadmaps', icon: <Map size={18} /> },
@@ -320,13 +330,45 @@ export default function ResourcesTabs() {
     ];
 
     const [activeMainTab, setActiveMainTab] = useState('roadmaps');
+    useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+}, [activeMainTab]);
     const [activeSubTab, setActiveSubTab] = useState(aiPromptsCategories[0]);
     const [isInternshipModalOpen, setIsInternshipModalOpen] = useState(false);
     const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
     const [isMindsetModalOpen, setIsMindsetModalOpen] = useState(false);
     const [activeRoadmap, setActiveRoadmap] = useState<any>(null);
 
+    // Progress State mapping roadmap IDs to completion percentages
+    const [progressData, setProgressData] = useState<Record<string, number>>({});
+    const ITEMS_PER_PAGE = 2;
+    const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+    const [isLoading, setIsLoading] = useState(false);
+    const observerRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
+
+    useEffect(() => {
+    if (activeMainTab !== 'roadmaps') return;
+    
+    const observer = new IntersectionObserver(
+        (entries) => {
+            if (entries[0].isIntersecting && !isLoading) {
+                const roadmaps = originalResources.roadmaps;
+                if (visibleCount < roadmaps.length) {
+                    setIsLoading(true);
+                    setTimeout(() => {
+                        setVisibleCount(prev => Math.min(prev + ITEMS_PER_PAGE, roadmaps.length));
+                        setIsLoading(false);
+                    }, 800);
+                }
+            }
+        },
+        { threshold: 1.0 }
+    );
+
+    if (observerRef.current) observer.observe(observerRef.current);
+    return () => observer.disconnect();
+}, [visibleCount, isLoading, activeMainTab]);
 
     useEffect(() => {
         const openParam = searchParams.get('open');
@@ -348,6 +390,43 @@ export default function ResourcesTabs() {
             }
         }
     }, [searchParams]);
+
+    // Fetch user progress across all roadmaps
+    useEffect(() => {
+        const fetchProgress = async () => {
+            if (!user) return;
+            try {
+                const progressRef = collection(db, 'members', user.uid, 'progress');
+                const snapshot = await getDocs(progressRef);
+                const progressMap: Record<string, number> = {};
+                
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const roadmapId = docSnap.id;
+                    
+                    // Find total phases from originalData to calculate %
+                    const matchedRoadmap = originalResources.roadmaps.find(r => 
+                        (r.details?.id || r.title.toLowerCase().replace(/\s+/g, '-')) === roadmapId
+                    );
+                    
+                    if (matchedRoadmap && matchedRoadmap.details?.phases) {
+                        const totalPhases = matchedRoadmap.details.phases.length;
+                        const completed = data.completedPhases?.length || 0;
+                        const percentage = Math.round((completed / totalPhases) * 100);
+                        progressMap[roadmapId] = Math.min(percentage, 100);
+                    }
+                });
+                setProgressData(progressMap);
+            } catch (err) {
+                console.error("Error fetching roadmap progress", err);
+            }
+        };
+
+        // Fetch when user changes, or whenever the Roadmap Modal is closed
+        if (!isRoadmapModalOpen) {
+            fetchProgress();
+        }
+    }, [user, isRoadmapModalOpen]); 
 
     const handleAccessNow = (resource: any) => {
         if (resource.title === "Internship Calendar") {
@@ -377,23 +456,12 @@ export default function ResourcesTabs() {
                 isOpen={isMindsetModalOpen}
                 onClose={() => setIsMindsetModalOpen(false)}
             />
-
-            {/* Header */}
-            <div className="text-center mb-10">
-                <h2 className="text-3xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">
-                    Developer Resources
-                </h2>
-                <p className="text-muted-foreground max-w-2xl mx-auto">
-                    Curated tools, prompts, and roadmaps to accelerate your career.
-                </p>
-            </div>
-
             {/* Main Navigation (Top Level) */}
             <div className="flex flex-wrap justify-center gap-4 mb-10">
                 {mainSections.map((section) => {
                     const isActive = activeMainTab === section.id;
                     return (
-                        <button
+                        <button aria-label="Action button" 
                             key={section.id}
                             onClick={() => setActiveMainTab(section.id)}
                             className={`flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all border ${isActive
@@ -420,7 +488,7 @@ export default function ResourcesTabs() {
                                 const isActive = activeSubTab === catKey;
 
                                 return (
-                                    <button
+                                    <button aria-label="Action button" 
                                         key={catKey}
                                         onClick={() => setActiveSubTab(catKey)}
                                         className={`px-4 py-2 rounded-xl text-sm font-medium transition-all relative overflow-hidden ${isActive
@@ -481,7 +549,7 @@ export default function ResourcesTabs() {
                                                     </div>
                                                     {prompt.example}
                                                 </div>
-                                                <button className="w-full mt-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 group/btn">
+                                                <button aria-label="Action button"  className="w-full mt-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 group/btn">
                                                     Try this Prompt
                                                     <Terminal size={14} className="group-hover/btn:text-primary transition-colors" />
                                                 </button>
@@ -493,73 +561,113 @@ export default function ResourcesTabs() {
                         </div>
                     </div>
                 ) : (
-                    // --- Other Sections (Standard Cards) ---
+                    // --- Other Sections (Standard Cards & Roadmaps) ---
                     <div className={styles.grid}>
                         <AnimatePresence mode="popLayout">
-                            {originalResources[activeMainTab as keyof typeof originalResources]?.map((resource, index) => (
-                                <motion.div
-                                    key={resource.title}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -20 }}
-                                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                                    className="h-full"
-                                >
-                                    <PremiumCard 
-                                        className={`${styles.resourceCard} h-full group relative overflow-hidden`}
-                                        bookmarkItem={
-                                            activeMainTab === 'roadmaps' && resource.status !== 'coming_soon'
-                                                ? {
-                                                      id: resource.title,
-                                                      title: resource.title,
-                                                      description: resource.description,
-                                                      type: 'roadmap',
-                                                      color: resource.color,
-                                                      path: `/resources?open=roadmap&title=${encodeURIComponent(resource.title)}`
-                                                  }
-                                                : undefined
-                                        }
+                            {(activeMainTab === 'roadmaps' 
+                            ? originalResources.roadmaps.slice(0, visibleCount) 
+                            : originalResources[activeMainTab as keyof typeof originalResources]
+                            )?.map((resource, index) => {
+                                // Calculate Progress for Roadmaps
+                                const roadmapId = resource.details?.id || resource.title.toLowerCase().replace(/\s+/g, '-');
+                                const progress = progressData[roadmapId] || 0;
+                                
+                                return (
+                                    <motion.div
+                                        key={resource.title}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                                        className="h-full"
                                     >
-                                        {/* Coming Soon Overlay */}
-                                        {resource.status === 'coming_soon' && (
-                                            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex items-center justify-center">
-                                                <div className="bg-black/80 border border-white/10 px-4 py-2 rounded-full text-sm font-medium text-white/80 shadow-xl transform -rotate-12">
-                                                    Not yet Added
+                                        <PremiumCard 
+                                            className={`${styles.resourceCard} h-full group flex flex-col relative overflow-hidden`}
+                                            bookmarkItem={
+                                                activeMainTab === 'roadmaps' && resource.status !== 'coming_soon'
+                                                    ? {
+                                                          id: resource.title,
+                                                          title: resource.title,
+                                                          description: resource.description,
+                                                          type: 'roadmap',
+                                                          color: resource.color,
+                                                          path: `/resources?open=roadmap&title=${encodeURIComponent(resource.title)}`
+                                                      }
+                                                    : undefined
+                                            }
+                                        >
+                                            {/* Coming Soon Overlay */}
+                                            {resource.status === 'coming_soon' && (
+                                                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-20 flex items-center justify-center">
+                                                    <div className="bg-black/80 border border-white/10 px-4 py-2 rounded-full text-sm font-medium text-white/80 shadow-xl transform -rotate-12">
+                                                        Not yet Added
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div
+                                                className={styles.iconWrapper}
+                                                style={{ background: resource.color }}
+                                            >
+                                                {resource.icon}
+                                            </div>
+
+                                            <h3 className={styles.resourceTitle}>{resource.title}</h3>
+                                            <p className={styles.resourceDesc}>{resource.description}</p>
+                                            
+                                            <div className="mt-auto">
+                                                {/* Progress Bar (Only visible if progress > 0 and it's an active roadmap) */}
+                                                {activeMainTab === 'roadmaps' && resource.status !== 'coming_soon' && progress > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="flex justify-between text-xs text-muted-foreground mb-1 font-medium">
+                                                            <span>Course Progress</span>
+                                                            <span className="text-primary">{progress}%</span>
+                                                        </div>
+                                                        <div className="w-full h-[6px] bg-muted/30 rounded-full overflow-hidden border border-white/5">
+                                                            <motion.div 
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${progress}%` }}
+                                                                transition={{ duration: 1, ease: "easeOut" }}
+                                                                className="h-full bg-gradient-to-r from-primary to-purple-500 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className={styles.footer}>
+                                                    <div className={styles.rating}>
+                                                        <Star size={16} fill="currentColor" />
+                                                        {resource.rating}
+                                                    </div>
+                                                    <button aria-label="Action button" 
+                                                        className={`${styles.action} ${resource.status === 'coming_soon' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        onClick={() => resource.status !== 'coming_soon' && handleAccessNow(resource)}
+                                                        disabled={resource.status === 'coming_soon'}
+                                                    >
+                                                        {resource.isDetailed ? (progress > 0 ? "Resume Learning" : "View Roadmap") : "Access Now"}
+                                                    </button>
                                                 </div>
                                             </div>
-                                        )}
-
-                                        <div
-                                            className={styles.iconWrapper}
-                                            style={{ background: resource.color }}
-                                        >
-                                            {resource.icon}
-                                        </div>
-
-                                        <h3 className={styles.resourceTitle}>{resource.title}</h3>
-                                        <p className={styles.resourceDesc}>{resource.description}</p>
-
-                                        <div className={styles.footer}>
-                                            <div className={styles.rating}>
-                                                <Star size={16} fill="currentColor" />
-                                                {resource.rating}
-                                            </div>
-                                            <button
-                                                className={`${styles.action} ${resource.status === 'coming_soon' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                onClick={() => resource.status !== 'coming_soon' && handleAccessNow(resource)}
-                                                disabled={resource.status === 'coming_soon'}
-                                            >
-                                                {resource.isDetailed ? "View Roadmap" : "Access Now"}
-                                            </button>
-                                        </div>
-                                    </PremiumCard>
-                                </motion.div>
-                            ))}
+                                        </PremiumCard>
+                                    </motion.div>
+                                );
+                            })}
                         </AnimatePresence>
+                        
+                        {/* Infinite Scroll Observer */}
+                        {activeMainTab === 'roadmaps' && (
+                            <div ref={observerRef} className="w-full py-4 flex justify-center">
+                                {isLoading && (
+                                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                        Loading more...
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
         </div>
     );
 }
-

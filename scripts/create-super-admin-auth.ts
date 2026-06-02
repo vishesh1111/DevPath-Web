@@ -20,7 +20,7 @@ const auth = getAuth(app);
 async function createSuperAdmin() {
     try {
         console.log("Creating Super Admin Auth user...");
-        await createUserWithEmailAndPassword(auth, "ap8548328@gmail.com", "Aditya@2006@#");
+        await createUserWithEmailAndPassword(auth, process.env.SUPER_ADMIN_EMAIL as string, process.env.SUPER_ADMIN_PASSWORD as string);
         console.log("Super Admin Auth user created successfully.");
         process.exit(0);
     } catch (error: any) {

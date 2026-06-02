@@ -16,6 +16,15 @@ export function useMaintenance() {
     });
 
     useEffect(() => {
+        if (!db) {
+            setState({
+                isMaintenanceMode: false,
+                maintenanceMessage: '',
+                loading: false,
+            });
+            return;
+        }
+
         // Subscribe to real-time updates from Firestore
         const unsubscribe = onSnapshot(doc(db, 'settings', 'general'), (doc) => {
             if (doc.exists()) {
@@ -28,7 +37,8 @@ export function useMaintenance() {
                 const cleanedMessage = rawMessage.replace(/^"|"$/g, '');
 
                 // Handle string "true" or boolean true
-                const isActive = modeValue === true || modeValue === "true";
+                const envOverride = process.env.NEXT_PUBLIC_FORCE_MAINTENANCE === 'true';
+                const isActive = envOverride || modeValue === true || modeValue === "true";
 
                 setState({
                     isMaintenanceMode: isActive,

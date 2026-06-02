@@ -16,94 +16,71 @@ export interface UserData {
     state?: string;
     followers?: string[];
     streak?: number;
-    achievements?: string[]; // Existing achievements
+    achievements?: string[];
 }
 
 export interface ProjectData {
-    stars?: string[]; // Array of user IDs who starred
+    stars?: string[];
 }
 
-export function calculateUserPointsAndBadges(user: UserData, projects: ProjectData[]) {
-    const newAchievements: string[] = [];
+/**
+ * Returns the XP value for a single badge.
+ * Social badges (GitHub, LinkedIn, Instagram) award more XP than standard badges.
+ */
+export function getBadgeXp(badgeId: string): number {
+    return SOCIAL_BADGES.includes(badgeId) ? POINTS.SOCIAL_BADGE_EARNED : POINTS.BADGE_EARNED;
+}
 
-    // --- 1. DETERMINE BADGES ---
+/**
+ * Determines which badges a user has earned based on their current profile
+ * and project data. Returns only the badge list — it does NOT calculate
+ * or return a point total, because total points include transactional XP
+ * (event participation, hackathon wins, daily logins, community follows)
+ * that cannot be derived from profile state alone.
+ *
+ * Callers should use Firestore `increment()` to award XP for newly unlocked
+ * badges rather than overwriting the user's total point value.
+ */
+export function determineBadges(user: UserData, projects: ProjectData[]): string[] {
+    const earned: string[] = [];
 
-    // Preserve Early Adopter if already exists (cannot be re-earned logically if it was time-limited)
+    // Early Adopter is time-limited — preserve if already held
     if (user.achievements?.includes('early-adopter')) {
-        newAchievements.push('early-adopter');
+        earned.push('early-adopter');
     }
 
-    // Profile Perfect
-    if (user.name && user.bio && user.photoURL && user.role) {
-        newAchievements.push('profile-perfect');
-    }
+    // Profile completeness
+    if (user.name && user.bio && user.photoURL && user.role) earned.push('profile-perfect');
+    if (user.bio && user.bio.length > 20) earned.push('storyteller');
+    if (user.photoURL) earned.push('face-of-community');
+    if (user.city || user.state) earned.push('local-hero');
 
-    // Connector (All 3)
-    if (user.github && user.linkedin && user.instagram) {
-        newAchievements.push('connector-social');
-    }
+    // Social links
+    if (user.github && user.linkedin && user.instagram) earned.push('connector-social');
+    if (user.github) earned.push('social-github');
+    if (user.linkedin) earned.push('social-linkedin');
+    if (user.instagram) earned.push('social-instagram');
 
-    // Social Badges
-    if (user.github) newAchievements.push('social-github');
-    if (user.linkedin) newAchievements.push('social-linkedin');
-    if (user.instagram) newAchievements.push('social-instagram');
-
-    // Basic Profile
-    if (user.bio && user.bio.length > 20) newAchievements.push('storyteller');
-    if (user.photoURL) newAchievements.push('face-of-community');
-    if (user.city || user.state) newAchievements.push('local-hero');
-
-    // Project Badges
+    // Projects
     const projectCount = projects.length;
-    if (projectCount >= 1) newAchievements.push('builder-1');
-    if (projectCount >= 3) newAchievements.push('builder-3');
-    if (projectCount >= 5) newAchievements.push('builder-5');
-    if (projectCount >= 10) newAchievements.push('builder-10');
+    if (projectCount >= 1)  earned.push('builder-1');
+    if (projectCount >= 3)  earned.push('builder-3');
+    if (projectCount >= 5)  earned.push('builder-5');
+    if (projectCount >= 10) earned.push('builder-10');
 
-    // Streak Badges
-    const streak = user.streak || 0;
-    if (streak >= 7) newAchievements.push('streak-7');
+    // Streak
+    if ((user.streak || 0) >= 7) earned.push('streak-7');
 
-    // --- 2. CALCULATE POINTS ---
+    return earned;
+}
 
-    // Badge Points
-    let badgePoints = 0;
-    newAchievements.forEach((badgeId: string) => {
-        if (SOCIAL_BADGES.includes(badgeId)) {
-            badgePoints += POINTS.SOCIAL_BADGE_EARNED;
-        } else {
-            badgePoints += POINTS.BADGE_EARNED;
-        }
-    });
-
-    // Follower Points
-    const followers = user.followers || [];
-    const followerPoints = followers.length * POINTS.FOLLOWER_GAINED;
-
-    // Project Points
-    let totalStars = 0;
-    projects.forEach(p => {
-        totalStars += (p.stars || []).length;
-    });
-    const projectPoints = (projectCount * 50) + (totalStars * POINTS.PROJECT_STAR);
-
-    // Streak Points
-    const streakPoints = streak * POINTS.STREAK_BONUS_PER_DAY;
-    const weeklyBonuses = Math.floor(streak / 7) * POINTS.WEEKLY_STREAK_BONUS;
-
-    const totalPoints = badgePoints + followerPoints + projectPoints + streakPoints + weeklyBonuses;
-
-    return {
-        points: totalPoints,
-        achievements: newAchievements,
-        stats: {
-            badgePoints,
-            followerPoints,
-            projectPoints,
-            streakPoints,
-            weeklyBonuses,
-            projectCount,
-            totalStars
-        }
-    };
+/**
+ * @deprecated Use `determineBadges` instead.
+ * This function returned an absolute `points` total that incorrectly
+ * overwrote transactional XP. Kept as a re-export shim so any remaining
+ * callers compile without changes while the migration is in progress.
+ */
+export function calculateUserPointsAndBadges(user: UserData, projects: ProjectData[]) {
+    const achievements = determineBadges(user, projects);
+    return { achievements, points: null };
 }

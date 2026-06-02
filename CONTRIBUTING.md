@@ -67,3 +67,9 @@ Thank you for your interest in contributing to the DevPath Community Website! We
 ## Code of Conduct
 
 Please note that this project is released with a [Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+
+## Git Contribution Guide
+
+New contributors can follow our detailed Git workflow guide here:
+
+- [Git Contribution Guide](./GIT_GUIDE.md)

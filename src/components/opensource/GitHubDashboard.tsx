@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Github, Star, GitFork, CircleDot, GitPullRequest, BookOpen, Plus, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Github, Star, GitFork, CircleDot, CircleOff, GitPullRequest, GitPullRequestArrow, BookOpen, Plus, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 interface Repo {
@@ -26,6 +26,8 @@ interface Issue {
     title: string;
     html_url: string;
     state: string;
+    closed_at?: string | null;
+    pull_request?: Record<string, unknown>;
     created_at: string;
     user: {
         login: string;
@@ -192,6 +194,7 @@ export default function GitHubDashboard({ accessToken }: GitHubDashboardProps) {
                             <Link
                                 href={selectedRepo.html_url}
                                 target="_blank"
+                                rel="noopener noreferrer"
                                 className="p-2 hover:bg-muted rounded-lg transition-colors"
                             >
                                 <ExternalLink size={20} />
@@ -229,7 +232,7 @@ export default function GitHubDashboard({ accessToken }: GitHubDashboardProps) {
                                     onChange={(e) => setNewIssueTitle(e.target.value)}
                                     className="flex-1 bg-background border border-input rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                 />
-                                <button
+                                <button aria-label="Action button" 
                                     type="submit"
                                     disabled={creatingIssue || !newIssueTitle.trim()}
                                     className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
@@ -244,24 +247,37 @@ export default function GitHubDashboard({ accessToken }: GitHubDashboardProps) {
                                 {loadingIssues ? (
                                     <div className="text-center py-4 text-muted-foreground text-sm">Loading issues...</div>
                                 ) : issues.length > 0 ? (
-                                    issues.map(issue => (
+                                    issues.map(issue => {
+                                        const isClosed = issue.state === 'closed' || Boolean(issue.closed_at);
+                                        const isPullRequest = Boolean(issue.pull_request);
+
+                                        return (
                                         <div key={issue.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg hover:bg-muted/40 transition-colors">
                                             <div className="flex items-center gap-3 overflow-hidden">
-                                                {issue.html_url.includes('pull') ? (
-                                                    <GitPullRequest size={16} className="text-purple-500 shrink-0" />
+                                                {isPullRequest ? (
+                                                    isClosed ? (
+                                                        <GitPullRequestArrow size={16} className="text-muted-foreground shrink-0" />
+                                                    ) : (
+                                                        <GitPullRequest size={16} className="text-purple-500 shrink-0" />
+                                                    )
                                                 ) : (
-                                                    <CircleDot size={16} className="text-green-500 shrink-0" />
+                                                    isClosed ? (
+                                                        <CircleOff size={16} className="text-muted-foreground shrink-0" />
+                                                    ) : (
+                                                        <CircleDot size={16} className="text-green-500 shrink-0" />
+                                                    )
                                                 )}
-                                                <span className="text-sm font-medium truncate">
+                                                <span className={`text-sm font-medium truncate ${isClosed ? 'text-muted-foreground' : 'text-foreground'}`}>
                                                     <span className="text-muted-foreground mr-2">#{issue.number}</span>
                                                     {issue.title}
                                                 </span>
                                             </div>
-                                            <Link href={issue.html_url} target="_blank" className="text-xs text-muted-foreground hover:text-primary whitespace-nowrap ml-2">
+                                            <Link href={issue.html_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-primary whitespace-nowrap ml-2">
                                                 View
                                             </Link>
                                         </div>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <div className="text-center py-4 text-muted-foreground text-sm">No recent issues found.</div>
                                 )}

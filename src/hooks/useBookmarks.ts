@@ -15,7 +15,8 @@ const getSavedBookmarks = (): BookmarkItem[] => {
     if (typeof window === 'undefined') return [];
     try {
         const data = localStorage.getItem('devpath_saved_roadmaps');
-        return data ? JSON.parse(data) : [];
+        const parsed = data ? JSON.parse(data) : [];
+        return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
         console.error('Error reading bookmarks from localStorage', e);
         return [];
@@ -47,14 +48,22 @@ export function useBookmarks() {
         const current = getSavedBookmarks();
         if (current.some(b => b.id === item.id)) return;
         const updated = [...current, item];
-        localStorage.setItem('devpath_saved_roadmaps', JSON.stringify(updated));
+        try {
+            localStorage.setItem('devpath_saved_roadmaps', JSON.stringify(updated));
+        } catch (e) {
+            console.error('Failed to write bookmark to localStorage', e);
+        }
         listeners.forEach(listener => listener());
     };
 
     const removeBookmark = (id: string) => {
         const current = getSavedBookmarks();
         const updated = current.filter(b => b.id !== id);
-        localStorage.setItem('devpath_saved_roadmaps', JSON.stringify(updated));
+        try {
+            localStorage.setItem('devpath_saved_roadmaps', JSON.stringify(updated));
+        } catch (e) {
+            console.error('Failed to remove bookmark from localStorage', e);
+        }
         listeners.forEach(listener => listener());
     };
 
@@ -79,3 +88,4 @@ export function useBookmarks() {
         isReady: mounted
     };
 }
+

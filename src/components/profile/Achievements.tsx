@@ -39,7 +39,7 @@ export default function Achievements() {
         };
 
         fetchData();
-    }, [user]);
+    }, [user?.uid, user?.points]);
 
     if (!user) return null;
 
@@ -60,6 +60,7 @@ export default function Achievements() {
         { id: 'face-of-community', name: 'Face of Community', description: 'Uploaded a profile picture.', icon: '😊' },
         { id: 'local-hero', name: 'Local Hero', description: 'Added location details.', icon: '📍' },
         { id: 'streak-7', name: 'Dedicated', description: '7-day login streak.', icon: '🔥' },
+        { id: 'rising-star', name: 'Rising Star', description: 'Got 20+ stars on a project.', icon: '⭐' },
         { id: 'top-collaborator', name: 'Top Collaborator', description: 'Active contributor to community projects.', icon: '🤝' },
     ].map(badge => ({
         ...badge,

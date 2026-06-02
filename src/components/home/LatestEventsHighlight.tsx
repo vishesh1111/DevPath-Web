@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Calendar, MapPin, ExternalLink, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
@@ -22,7 +23,6 @@ export default function LatestEventsHighlight({ className }: { className?: strin
                     orderBy('date', 'asc'),
                     limit(1)
                 );
-
                 const snapshot = await getDocs(q);
                 if (mounted && !snapshot.empty) {
                     const eventData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
@@ -30,6 +30,19 @@ export default function LatestEventsHighlight({ className }: { className?: strin
                 }
             } catch (error) {
                 console.error("Error fetching latest event:", error);
+
+                try {
+                    // Fallback: fetch and sort client-side
+                    const fallbackSnapshot = await getDocs(query(collection(db, 'events'),where('completed', '==', false))); 
+
+                    if (mounted && !fallbackSnapshot.empty) {
+                        const sortedEvents = fallbackSnapshot.docs.map((doc) => ({id: doc.id,...doc.data(),}))
+                        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        setEvent(sortedEvents[0]);
+                    }
+                } catch (fallbackError) {
+                    console.error("Fallback fetch failed:", fallbackError);
+                }
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -71,7 +84,7 @@ export default function LatestEventsHighlight({ className }: { className?: strin
 
                         <div className="flex flex-nowrap gap-4 pt-2">
                             {event.registerLink && (
-                                <a
+                                <a aria-label="Link" 
                                     href={event.registerLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -92,9 +105,13 @@ export default function LatestEventsHighlight({ className }: { className?: strin
                     {/* Image/Visual - Hidden on smaller screens if needed or adjusted */}
                     {event.image && (
                         <div className="w-full xl:w-1/3 aspect-video xl:aspect-square max-h-[200px] xl:max-h-[250px] relative rounded-xl overflow-hidden shadow-2xl border border-white/10 group shrink-0 hidden sm:block">
-                            <div
-                                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                                style={{ backgroundImage: `url(${event.image})` }}
+                            <Image
+                                src={event.image}
+                                alt={event.title || 'Latest Event Image'}
+                                fill
+                                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                sizes="(max-width: 1280px) 100vw, 33vw"
+                                priority
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                         </div>

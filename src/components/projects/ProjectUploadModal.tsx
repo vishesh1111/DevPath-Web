@@ -2,10 +2,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { X, Upload, Plus, Trash2, Link as LinkIcon, Video, Image as ImageIcon, Globe, Save } from 'lucide-react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, writeBatch, doc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { POINTS } from '@/lib/points';
 import ReactMarkdown from 'react-markdown';
+import DOMPurify from 'dompurify';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 
@@ -116,26 +119,23 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                 updatedAt: serverTimestamp()
             };
 
+            const batch = writeBatch(db);
+
             if (initialData?.id) {
-                // Update existing project
-                const projectDataWithTimestamp = { ...projectData, updatedAt: serverTimestamp() };
+                // --- Update existing project (atomic) ---
+                // Both the root collection and the member subcollection are updated in a
+                // single batch so neither can succeed while the other fails.
+                const rootRef = doc(db, 'projects', initialData.id);
+                const subRef  = doc(db, 'members', userId, 'projects', initialData.id);
 
-                // 1. Update in Root Collection (Main Source)
-                try {
-                    await updateDoc(doc(db, 'projects', initialData.id), projectDataWithTimestamp);
-                } catch (e) {
-                    console.warn("Could not update root doc (might not exist):", e);
-                }
-
-                // 2. Update in Subcollection (Legacy/Backup)
-                try {
-                    const subcollectionParentId = userId;
-                    await updateDoc(doc(db, 'members', subcollectionParentId, 'projects', initialData.id), projectDataWithTimestamp);
-                } catch (e) {
-                    console.warn("Could not update subcollection doc:", e);
-                }
+                batch.update(rootRef, projectData);
+                batch.update(subRef,  projectData);
             } else {
-                // Create new project
+                // --- Create new project (atomic) ---
+                // A shared document ID is generated once and used for both writes so the
+                // two collections always stay in sync.
+                const newId = doc(collection(db, 'projects')).id;
+
                 const newProjectData = {
                     ...projectData,
                     userId,
@@ -146,22 +146,32 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                     starCount: 0
                 };
 
-                // Generate ID
-                const newDocRef = doc(collection(db, 'projects'));
-                const newId = newDocRef.id;
+                const rootRef    = doc(db, 'projects', newId);
+                const subRef     = doc(db, 'members', userId, 'projects', newId);
+                const memberRef  = doc(db, 'members', userId);
+                const leaderboardRef = doc(db, 'leaderboard', userId);
+                const today = new Date().toISOString().split('T')[0];
 
-                // 1. Set in Root Collection
-                await setDoc(doc(db, 'projects', newId), newProjectData);
-
-                // 2. Set in Subcollection (with same ID)
-                const subcollectionParentId = userId;
-                await setDoc(doc(db, 'members', subcollectionParentId, 'projects', newId), newProjectData);
+                batch.set(rootRef,   newProjectData);
+                batch.set(subRef,    newProjectData);
+                // XP award is part of the same atomic batch — it only lands if both
+                // project writes succeed.
+                batch.update(memberRef, { points: increment(POINTS.CREATE_PROJECT) });
+                batch.set(leaderboardRef, {
+                    uid: userId,
+                    name: userName,
+                    points: increment(POINTS.CREATE_PROJECT),
+                    role: 'member',
+                    lastActive: today
+                }, { merge: true });
             }
+
+            await batch.commit();
 
             onSuccess();
             onClose();
         } catch (error) {
-            console.error("Error saving project:", error);
+            console.error('Error saving project:', error);
             alert(`Failed to save project: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
@@ -173,7 +183,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
             <div className="bg-card w-full max-w-2xl rounded-xl border border-border shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between p-4 border-b border-border">
                     <h2 className="text-xl font-bold">{initialData ? 'Edit Project' : 'Add New Project'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
+                    <button aria-label="Action button"  onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -196,14 +206,14 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                             <div className="flex justify-between items-center mb-2">
                                 <label className="block text-sm font-medium">Description</label>
                                 <div className="flex bg-muted rounded-lg p-1">
-                                    <button
+                                    <button aria-label="Action button" 
                                         type="button"
                                         onClick={() => setDescTab('write')}
                                         className={`px-3 py-1 text-xs rounded-md transition-all ${descTab === 'write' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                                     >
                                         Write
                                     </button>
-                                    <button
+                                    <button aria-label="Action button" 
                                         type="button"
                                         onClick={() => setDescTab('preview')}
                                         className={`px-3 py-1 text-xs rounded-md transition-all ${descTab === 'preview' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
@@ -225,7 +235,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                                 <div className="w-full px-4 py-2 bg-background border border-border rounded-lg min-h-[150px] prose prose-invert max-w-none text-sm overflow-y-auto">
                                     {description ? (
                                         <ReactMarkdown rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]}>
-                                            {description}
+                                            {DOMPurify.sanitize(description)}
                                         </ReactMarkdown>
                                     ) : (
                                         <span className="text-muted-foreground italic">Nothing to preview</span>
@@ -254,7 +264,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                                 {skills.map(skill => (
                                     <span key={skill} className="bg-secondary text-secondary-foreground px-2 py-1 rounded-md text-sm flex items-center gap-1">
                                         {skill}
-                                        <button type="button" onClick={() => handleRemoveSkill(skill)} className="hover:text-red-500">
+                                        <button aria-label="Action button"  type="button" onClick={() => handleRemoveSkill(skill)} className="hover:text-red-500">
                                             <X size={14} />
                                         </button>
                                     </span>
@@ -277,7 +287,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                             {showSkillSuggestions && skillInput && filteredSkills.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                     {filteredSkills.map(skill => (
-                                        <button
+                                        <button aria-label="Action button" 
                                             key={skill}
                                             type="button"
                                             onClick={() => handleAddSkill(skill)}
@@ -293,7 +303,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                         <div>
                             <label className="block text-sm font-medium mb-3">Project Media</label>
                             <div className="flex gap-4 mb-4">
-                                <button
+                                <button aria-label="Action button" 
                                     type="button"
                                     onClick={() => setMediaType('images')}
                                     className={`flex-1 py-2 px-4 rounded-lg border flex items-center justify-center gap-2 transition-colors ${mediaType === 'images'
@@ -303,7 +313,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                                 >
                                     <ImageIcon size={18} /> Screenshots
                                 </button>
-                                <button
+                                <button aria-label="Action button" 
                                     type="button"
                                     onClick={() => setMediaType('video')}
                                     className={`flex-1 py-2 px-4 rounded-lg border flex items-center justify-center gap-2 transition-colors ${mediaType === 'video'
@@ -329,7 +339,7 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                                             placeholder="https://example.com/image.png"
                                             disabled={screenshots.length >= 5}
                                         />
-                                        <button
+                                        <button aria-label="Action button" 
                                             type="button"
                                             onClick={handleAddScreenshot}
                                             disabled={!screenshotInput || screenshots.length >= 5}
@@ -343,8 +353,8 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                             {screenshots.map((url, index) => (
                                                 <div key={index} className="relative group aspect-video bg-muted rounded-lg overflow-hidden border border-border">
-                                                    <img src={url} alt={`Screenshot ${index + 1}`} className="w-full h-full object-cover" />
-                                                    <button
+                                                    <Image src={url} alt={`Screenshot ${index + 1}`} fill className="object-cover" />
+                                                    <button aria-label="Action button" 
                                                         type="button"
                                                         onClick={() => handleRemoveScreenshot(index)}
                                                         className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -377,14 +387,14 @@ export default function ProjectUploadModal({ isOpen, onClose, userId, userEmail,
                         </div>
 
                         <div className="pt-4 flex justify-end gap-3">
-                            <button
+                            <button aria-label="Action button" 
                                 type="button"
                                 onClick={onClose}
                                 className="px-6 py-2 rounded-lg hover:bg-muted transition-colors"
                             >
                                 Cancel
                             </button>
-                            <button
+                            <button aria-label="Action button" 
                                 type="submit"
                                 disabled={loading}
                                 className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"

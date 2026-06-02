@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ExternalLink, Newspaper, RefreshCw, AlertCircle } from 'lucide-react';
 import styles from './CodingNews.module.css';
@@ -12,10 +13,68 @@ interface NewsItem {
     image: string | null;
 }
 
+const FALLBACK_NEWS: NewsItem[] = [
+    {
+        source: "DevPath Blog",
+        title: "Optimizing Next.js Web Vitals: A Deep Dive into LCP, FID, and CLS for 2026",
+        url: "https://devpath.in",
+        image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800"
+    },
+    {
+        source: "Agentic Tech",
+        title: "The Rise of Agentic AI: How Advanced Coding Assistants are Redefining Developer Workflows",
+        url: "https://techcrunch.com",
+        image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800"
+    },
+    {
+        source: "Next.js Blog",
+        title: "Next.js 16 Released: Turbopack for Faster Builds, React 19 Support, and Server Actions",
+        url: "https://vercel.com/blog",
+        image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800"
+    },
+    {
+        source: "GitHub",
+        title: "Open Source India: Empowering the Next Generation of Developers Nationwide",
+        url: "https://github.blog",
+        image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800"
+    }
+];
+
+const FALLBACK_NEWS_IMAGE =
+    'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1000&auto=format&fit=crop';
+
+interface NewsCardImageProps {
+    src: string;
+    alt: string;
+    sizes?: string;
+    priority?: boolean;
+}
+
+function NewsCardImage({ src, alt, sizes, priority }: NewsCardImageProps) {
+    const [imgSrc, setImgSrc] = useState(src);
+
+    useEffect(() => {
+        setImgSrc(src);
+    }, [src]);
+
+    return (
+        <Image
+            src={imgSrc}
+            alt={alt}
+            fill
+            className={styles.image}
+            sizes={sizes}
+            priority={priority}
+            onError={() => setImgSrc(FALLBACK_NEWS_IMAGE)}
+        />
+    );
+}
+
 export default function CodingNews() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const loopedNews = news.length > 0 ? [...news, ...news] : [];
 
     // Scroll Logic Refs
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -28,7 +87,9 @@ export default function CodingNews() {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_NEWS_API_URL;
             if (!apiUrl) {
-                throw new Error("API URL not configured");
+                // If API URL is not configured, load fallback news gracefully
+                setNews(FALLBACK_NEWS);
+                return;
             }
 
             const response = await fetch(apiUrl);
@@ -39,7 +100,8 @@ export default function CodingNews() {
             setNews(data);
         } catch (err) {
             console.error("Error fetching news:", err);
-            setError("Failed to load latest news. Please try again later.");
+            // Fall back gracefully even if fetch fails
+            setNews(FALLBACK_NEWS);
         } finally {
             setLoading(false);
         }
@@ -55,9 +117,12 @@ export default function CodingNews() {
         if (!container) return;
 
         let animationFrameId: number;
+        const AUTO_SCROLL_EDGE_THRESHOLD = 2;
 
         const scroll = () => {
             if (container) {
+                const loopBoundary = container.scrollWidth / 2;
+
                 if (isHovering) {
                     // Mouse movement scrolling logic
                     const rect = container.getBoundingClientRect();
@@ -77,10 +142,18 @@ export default function CodingNews() {
                         const speed = Math.max(1, (relativeX - rightZone) / 10); // Adjusted speed divisor
                         container.scrollLeft += speed;
                     }
+
+                    if (loopBoundary > 0 && container.scrollLeft >= loopBoundary) {
+                        container.scrollLeft -= loopBoundary;
+                    } else if (loopBoundary > 0 && container.scrollLeft < 0) {
+                        container.scrollLeft += loopBoundary;
+                    }
                 } else {
-                    // Auto-scroll when not hovering
-                    if (container.scrollLeft + container.clientWidth >= container.scrollWidth - 1) {
+                    // Auto-scroll when not hovering using a seamless loop
+                    if (loopBoundary <= 0) {
                         container.scrollLeft = 0;
+                    } else if (container.scrollLeft >= loopBoundary - AUTO_SCROLL_EDGE_THRESHOLD) {
+                        container.scrollLeft -= loopBoundary;
                     } else {
                         container.scrollLeft += 0.5; // Slow auto-scroll speed
                     }
@@ -146,7 +219,7 @@ export default function CodingNews() {
                         }}
                     >
                         <div className={styles.scrollTrack}>
-                            {news.map((item, index) => (
+                            {loopedNews.map((item, index) => (
                                 <motion.a
                                     key={`${index}-${item.url}`}
                                     href={item.url}
@@ -160,9 +233,12 @@ export default function CodingNews() {
                                 >
                                     <div className={styles.imageWrapper}>
                                         {item.image ? (
-                                            <img src={item.image} alt={item.title} className={styles.image} onError={(e) => {
-                                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1000&auto=format&fit=crop';
-                                            }} />
+                                            <NewsCardImage 
+                                                src={item.image} 
+                                                alt={item.title} 
+                                                sizes="(max-width: 640px) 280px, 320px"
+                                                priority={index < 2}
+                                            />
                                         ) : (
                                             <div className={styles.placeholderImage}>
                                                 <Newspaper size={32} opacity={0.5} />

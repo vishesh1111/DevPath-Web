@@ -4,6 +4,9 @@ const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const path = require('path');
 
+// Configure dotenv to read from the project root .env.local
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
+
 // Hardcode path to service account key (assuming it's in project root)
 // Script is in scripts/, so go up one level
 const serviceAccountPath = path.join(__dirname, '..', 'service-account-key.json');
@@ -16,8 +19,8 @@ initializeApp({
 const auth = getAuth();
 const db = getFirestore();
 
-const SUPER_ADMIN_EMAIL = "devpathind.community@gmail.com";
-const SUPER_ADMIN_PASSWORD = "Aditya@2006@#";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
 
 async function createSuperAdmin() {
     console.log(`Creating/Updating Super Admin: ${SUPER_ADMIN_EMAIL}...`);

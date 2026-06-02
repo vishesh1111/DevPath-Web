@@ -1,35 +1,51 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { LEVELS, POINTS, calculateLevel } from '@/lib/points';
 import Image from 'next/image';
 import { Flame, Trophy, Star, Users, Award, Shield, Gift, Calendar } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
+interface LeaderboardEntry {
+    id: string;
+    email?: string;
+    name?: string;
+    photoURL?: string;
+    points?: number;
+}
+
 export default function PathwayPage() {
     const { user } = useAuth();
-    const [leaderboard, setLeaderboard] = useState<any[]>([]);
+    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
     const [loading, setLoading] = useState(true);
+    const leaderboardScrollRef = useRef<HTMLDivElement>(null);
+    const rowVirtualizer = useVirtualizer({
+        count: leaderboard.length,
+        getScrollElement: () => leaderboardScrollRef.current,
+        estimateSize: () => 72,
+        overscan: 8,
+    });
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
             try {
-                const q = query(collection(db, 'leaderboard'), orderBy('points', 'desc'), limit(50));
+                const q = query(collection(db, 'leaderboard'), orderBy('points', 'desc'));
                 const snapshot = await getDocs(q);
-                let data = snapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter((user: any) =>
-                        user.id !== 'devpathind.community@gmail.com' &&
-                        user.email !== 'devpathind.community@gmail.com' &&
-                        user.name !== 'Super Admin'
+                const data = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+                    .filter((entry) =>
+                        entry.id !== 'devpathind.community@gmail.com' &&
+                        entry.email !== 'devpathind.community@gmail.com' &&
+                        entry.name !== 'Super Admin'
                     );
 
                 // Fix missing names (e.g. Admins)
-                const { doc, getDoc, updateDoc, where } = await import('firebase/firestore');
+                const { doc, getDoc, where } = await import('firebase/firestore');
 
-                const updatedData = await Promise.all(data.map(async (entry: any) => {
+                const updatedData = await Promise.all(data.map(async (entry) => {
                     if (!entry.name || entry.name.trim() === '') {
                         try {
                             // 1. Try Members (UID)
@@ -151,51 +167,65 @@ export default function PathwayPage() {
                             {loading ? (
                                 <div className="p-8 text-center text-muted-foreground">Loading leaderboard...</div>
                             ) : (
-                                <div className="overflow-y-auto custom-scrollbar">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-muted/50 text-muted-foreground text-sm sticky top-0 z-10 backdrop-blur-sm">
-                                            <tr>
-                                                <th className="p-4 font-medium">Rank</th>
-                                                <th className="p-4 font-medium">Dev</th>
-                                                <th className="p-4 font-medium">Level</th>
-                                                <th className="p-4 font-medium text-right">Points</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {leaderboard.map((entry, index) => {
-                                                const level = calculateLevel(entry.points || 0).currentLevel;
-                                                return (
-                                                    <tr key={entry.id} className={`hover:bg-muted/50 transition-colors ${user?.uid === entry.id ? 'bg-primary/5' : ''}`}>
-                                                        <td className="p-4 font-mono font-bold text-muted-foreground">
-                                                            #{index + 1}
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-full bg-muted overflow-hidden">
-                                                                    {entry.photoURL ? (
-                                                                        <Image src={entry.photoURL} alt={entry.name} width={32} height={32} />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold">
-                                                                            {entry.name?.[0]}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <span className="font-medium">{entry.name}</span>
+                                <div
+                                    ref={leaderboardScrollRef}
+                                    className="h-[600px] overflow-y-auto custom-scrollbar"
+                                    aria-label="Leaderboard"
+                                >
+                                    <div className="grid grid-cols-[72px_minmax(180px,1fr)_112px_104px] bg-muted/50 text-muted-foreground text-sm sticky top-0 z-10 backdrop-blur-sm min-w-[560px]">
+                                        <div className="p-4 font-medium">Rank</div>
+                                        <div className="p-4 font-medium">Dev</div>
+                                        <div className="p-4 font-medium">Level</div>
+                                        <div className="p-4 font-medium text-right">Points</div>
+                                    </div>
+
+                                    <div
+                                        className="relative min-w-[560px]"
+                                        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                                    >
+                                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                            const entry = leaderboard[virtualRow.index];
+                                            const level = calculateLevel(entry.points || 0).currentLevel;
+                                            const displayName = entry.name?.trim() || 'Unknown Dev';
+
+                                            return (
+                                                <div
+                                                    key={entry.id}
+                                                    className={`absolute left-0 top-0 grid w-full grid-cols-[72px_minmax(180px,1fr)_112px_104px] border-t border-border transition-colors hover:bg-muted/50 ${user?.uid === entry.id ? 'bg-primary/5' : ''}`}
+                                                    style={{
+                                                        height: `${virtualRow.size}px`,
+                                                        transform: `translateY(${virtualRow.start}px)`,
+                                                    }}
+                                                >
+                                                    <div className="p-4 font-mono font-bold text-muted-foreground">
+                                                        #{virtualRow.index + 1}
+                                                    </div>
+                                                    <div className="p-4 min-w-0">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className="w-8 h-8 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                                                                {entry.photoURL ? (
+                                                                    <Image src={entry.photoURL} alt={displayName} width={32} height={32} className="h-full w-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold">
+                                                                        {displayName[0]}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className={`text-xs px-2 py-1 rounded-full border ${level.color} ${level.bg} ${level.border}`}>
-                                                                {level.name}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4 text-right font-mono font-bold">
-                                                            {entry.points || 0}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                            <span className="font-medium truncate">{displayName}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-4">
+                                                        <span className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${level.color} ${level.bg} ${level.border}`}>
+                                                            {level.name}
+                                                        </span>
+                                                    </div>
+                                                    <div className="p-4 text-right font-mono font-bold">
+                                                        {entry.points || 0}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -231,7 +261,7 @@ export default function PathwayPage() {
 
                                     <p className="text-sm text-emerald-100/80 leading-relaxed">
                                         The Sanrakshak is the ultimate steward of the DevPath ecosystem.
-                                        This role represents long-term ownership, trust, and responsibility for the platform's vision, governance, and continuity.
+                                        This role represents long-term ownership, trust, and responsibility for the platform&apos;s vision, governance, and continuity.
                                     </p>
 
                                     <div className="pt-2 flex items-center gap-2 text-xs font-mono text-emerald-500/70">
@@ -319,15 +349,15 @@ export default function PathwayPage() {
                                 { name: "DevPath Roadmap + Weekly Plan", cost: 12000, icon: "🗺️", desc: "A realistic roadmap: What to learn, what to build, in what order. Time-bound and outcome-focused." },
                                 { name: "Single Guided Project (Chosen Tech Stack)", cost: 20000, icon: "🏗️", desc: "User selects stack. Receives one clear project problem, scope, and expected output." },
                             ].map((reward) => (
-                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-primary/50 transition-colors group">
-                                    <div className="text-4xl mb-2 group-hover:scale-110 transition-transform duration-300">{reward.icon}</div>
+                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-primary/50 hover:scale-105 transition-all duration-300">
+                                    <div className="text-4xl mb-2">{reward.icon}</div>
                                     <div>
                                         <h3 className="font-bold text-lg">{reward.name}</h3>
                                         <p className="text-sm text-muted-foreground">{reward.desc}</p>
                                     </div>
                                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-border">
                                         <span className="font-mono font-bold text-primary">{reward.cost.toLocaleString()} pts</span>
-                                        <button className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
+                                        <button aria-label="Action button"  className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
                                             Redeem
                                         </button>
                                     </div>
@@ -347,15 +377,15 @@ export default function PathwayPage() {
                                 { name: "Community Spotlight", cost: 65000, icon: "🚀", desc: "Featured for Project, Learnings, and Execution clarity." },
                                 { name: "Verified Builder Badge", cost: 100000, icon: "🛠️", desc: "Earned only after completed project and review approval." },
                             ].map((reward) => (
-                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-blue-500/50 transition-colors group">
-                                    <div className="text-4xl mb-2 group-hover:scale-110 transition-transform duration-300">{reward.icon}</div>
+                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-blue-500/50 hover:scale-105 transition-all duration-300">
+                                    <div className="text-4xl mb-2">{reward.icon}</div>
                                     <div>
                                         <h3 className="font-bold text-lg">{reward.name}</h3>
                                         <p className="text-sm text-muted-foreground">{reward.desc}</p>
                                     </div>
                                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-border">
                                         <span className="font-mono font-bold text-primary">{reward.cost.toLocaleString()} pts</span>
-                                        <button className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
+                                        <button aria-label="Action button"  className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
                                             Redeem
                                         </button>
                                     </div>
@@ -376,15 +406,15 @@ export default function PathwayPage() {
                                 { name: "Laptop Cooling Pad", cost: 400000, icon: "❄️", desc: "Practical reward for people who actually build." },
                                 { name: "Free DevPath Event Ticket", cost: 500000, icon: "🎟️", desc: "Access to Workshop, Meetup, or DevPath-hosted event." },
                             ].map((reward) => (
-                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-purple-500/50 transition-colors group">
-                                    <div className="text-4xl mb-2 group-hover:scale-110 transition-transform duration-300">{reward.icon}</div>
+                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-purple-500/50 hover:scale-105 transition-all duration-300">
+                                    <div className="text-4xl mb-2">{reward.icon}</div>
                                     <div>
                                         <h3 className="font-bold text-lg">{reward.name}</h3>
                                         <p className="text-sm text-muted-foreground">{reward.desc}</p>
                                     </div>
                                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-border">
                                         <span className="font-mono font-bold text-primary">{reward.cost.toLocaleString()} pts</span>
-                                        <button className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
+                                        <button aria-label="Action button"  className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
                                             Redeem
                                         </button>
                                     </div>
@@ -402,15 +432,15 @@ export default function PathwayPage() {
                                 { name: "Mechanical Keyboard / Headset", cost: 800000, icon: "⌨️", desc: "One premium productivity accessory. Utility-focused." },
                                 { name: "DevPath Flagship Hardware", cost: 1000000, icon: "🖥️", desc: "External Monitor, Tablet, or Premium accessory. Rare & Symbolic." },
                             ].map((reward) => (
-                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-yellow-500/50 transition-colors group">
-                                    <div className="text-4xl mb-2 group-hover:scale-110 transition-transform duration-300">{reward.icon}</div>
+                                <div key={reward.name} className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4 hover:border-yellow-500/50 hover:scale-105 transition-all duration-300">
+                                    <div className="text-4xl mb-2">{reward.icon}</div>
                                     <div>
                                         <h3 className="font-bold text-lg">{reward.name}</h3>
                                         <p className="text-sm text-muted-foreground">{reward.desc}</p>
                                     </div>
                                     <div className="mt-auto pt-4 flex items-center justify-between border-t border-border">
                                         <span className="font-mono font-bold text-primary">{reward.cost.toLocaleString()} pts</span>
-                                        <button className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
+                                        <button aria-label="Action button"  className="px-3 py-1 text-xs bg-muted hover:bg-primary hover:text-primary-foreground rounded-full transition-colors">
                                             Redeem
                                         </button>
                                     </div>

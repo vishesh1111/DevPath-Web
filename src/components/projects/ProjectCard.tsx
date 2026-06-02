@@ -5,6 +5,7 @@ import { Target, ExternalLink, Github, Edit3, Play, Maximize2, Star, Bookmark } 
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -129,11 +130,12 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
     const embedUrl = getEmbedUrl(project.videoUrl || '');
 
     return (
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col h-full group/card">
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:border-primary/20 hover:scale-[1.02] transition-all duration-300 flex flex-col h-full group/card">
             {/* Media Section */}
             <div className="aspect-video bg-muted relative group">
                 {/* Offline Bookmark Button */}
                 <button
+                    type="button"
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -152,6 +154,7 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
                             : 'bg-background/80 text-muted-foreground hover:text-foreground hover:bg-background border border-border'
                     }`}
                     title={isLocalBookmarked ? "Remove Bookmark" : "Save Bookmark (Offline)"}
+                    aria-label={isLocalBookmarked ? "Remove Bookmark" : "Save Bookmark (Offline)"}
                 >
                     <Bookmark size={14} fill={isLocalBookmarked ? "currentColor" : "none"} />
                 </button>
@@ -165,10 +168,11 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
                         title={project.title}
                     />
                 ) : project.screenshots?.[0] ? (
-                    <img
+                    <Image
                         src={project.screenshots[0]}
                         alt={project.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-muted/50">
@@ -178,7 +182,7 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
 
                 {/* Overlay Actions */}
                 {isOwner && (
-                    <button
+                    <button aria-label="Action button" 
                         onClick={(e) => {
                             e.stopPropagation();
                             onEdit?.(project);
@@ -197,7 +201,7 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
                     <h3 className="font-bold text-lg line-clamp-1 flex-1" title={project.title}>{project.title}</h3>
                     <div className="flex items-center gap-2">
                         {project.websiteUrl && (
-                            <a
+                            <a aria-label="Link" 
                                 href={project.websiteUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -213,7 +217,7 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
                     <p className="text-xs text-primary font-medium">by {project.authorName || 'Anonymous'}</p>
 
                     {/* Star Button */}
-                    <button
+                    <button aria-label="Action button" 
                         onClick={handleToggleStar}
                         disabled={isStarring}
                         className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full transition-colors ${hasStarred
@@ -249,7 +253,7 @@ export default function ProjectCard({ project, isOwner, onEdit, onReadMore }: Pr
                     </p>
                 </div>
 
-                <button
+                <button aria-label="Action button" 
                     onClick={() => onReadMore ? onReadMore(project) : setShowFullDescription(!showFullDescription)}
                     className="text-xs text-primary hover:underline mt-auto self-start"
                 >

@@ -1,10 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { MessageSquare, ArrowRight } from 'lucide-react';
-import complaintIllustration from '@/assets/complaint-illustration.png';
 import { MagneticText } from '@/components/ui/magnetic-text';
+import { siteConfig } from '@/config/siteConfig';
 
 export default function ComplaintPage() {
     return (
@@ -18,15 +17,8 @@ export default function ComplaintPage() {
             <div className="container px-4 mx-auto flex flex-col items-center text-center z-10">
                 <div className="mb-8 relative group">
                     <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
-                    <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-                        <Image
-                            src={complaintIllustration}
-                            alt="Community Voice"
-                            width={600}
-                            height={400}
-                            className="object-cover"
-                            priority
-                        />
+                    <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-white/5 flex items-center justify-center" style={{ width: 600, height: 240 }}>
+                        <MessageSquare className="text-cyan-400 opacity-30" size={120} />
                     </div>
                 </div>
 
@@ -43,7 +35,7 @@ export default function ComplaintPage() {
                 </h2>
 
                 <Link
-                    href="https://forms.gle/ptMuZVQU1nkpnbCz9"
+                    href={siteConfig.contact.complaintsForm}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group relative inline-flex items-center gap-3 px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-500/50 rounded-full transition-all duration-300 backdrop-blur-sm"

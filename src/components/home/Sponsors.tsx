@@ -1,14 +1,13 @@
 "use client";
 
 import Image from 'next/image';
-import oscgLogo from '@/assets/oscg26.png';
 import styles from './Sponsors.module.css';
 
 export default function Sponsors() {
     const communitySponsors = [
         {
             name: "OSCG",
-            logo: oscgLogo,
+            logo: "https://raw.githubusercontent.com/devpathindcommunity-india/DevPath-Web/master/src/assets/oscg26.png",
             url: "https://osconnect.org/"
         },
         {
@@ -31,7 +30,7 @@ export default function Sponsors() {
     const eventSponsors = [
         {
             name: "Devfolio",
-            logo: "https://github.com/devfolioco/brand-assets/blob/main/Logo/Logo.png?raw=true",
+            logo: "https://github.com/devfolioco/brand-assets/blob/main/Logo/logo.webp?raw=true",
             url: "https://devfolio.co/"
         },
         {
@@ -76,7 +75,7 @@ export default function Sponsors() {
                 <div className={styles.marqueeContainer}>
                     <div className={styles.marqueeTrack}>
                         {[...communitySponsors, ...communitySponsors].map((sponsor, index) => (
-                            <a
+                            <a aria-label="Link" 
                                 key={index}
                                 href={sponsor.url}
                                 target="_blank"
@@ -90,7 +89,7 @@ export default function Sponsors() {
                                         width={200}
                                         height={100}
                                         className={styles.logo}
-                                        style={{ objectFit: 'contain' }}
+                                        style={{ width: 'auto', height: 'auto', objectFit: 'contain' }}
                                     />
                                 </div>
                             </a>
@@ -105,7 +104,7 @@ export default function Sponsors() {
                 <div className={styles.marqueeContainer}>
                     <div className={styles.marqueeTrack}>
                         {[...eventSponsors, ...eventSponsors].map((sponsor, index) => (
-                            <a
+                            <a aria-label="Link" 
                                 key={index}
                                 href={sponsor.url}
                                 target="_blank"
@@ -119,7 +118,7 @@ export default function Sponsors() {
                                         width={200}
                                         height={100}
                                         className={styles.logo}
-                                        style={{ objectFit: 'contain' }}
+                                        style={{ width: 'auto', height: 'auto', objectFit: 'contain' }}
                                     />
                                 </div>
                             </a>

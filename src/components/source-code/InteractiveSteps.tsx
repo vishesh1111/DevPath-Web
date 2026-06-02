@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GitFork, Download, Terminal, Play, CheckCircle, Copy, FileText } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
 import styles from './InteractiveSteps.module.css';
 
 const steps = [
@@ -59,10 +60,13 @@ export default function InteractiveSteps() {
         return () => clearInterval(interval);
     }, []);
 
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const handleCopy = async (text: string) => {
+        const copiedSuccessfully = await copyToClipboard(text);
+
+        if (copiedSuccessfully) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
     };
 
     return (
@@ -114,7 +118,7 @@ export default function InteractiveSteps() {
                             <span className={styles.prompt}>$</span>
                             <code className={styles.command}>{steps[activeStep].command}</code>
                             {steps[activeStep].id !== 1 && (
-                                <button
+                                <button aria-label="Action button" 
                                     className={styles.copyButton}
                                     onClick={() => handleCopy(steps[activeStep].command)}
                                 >

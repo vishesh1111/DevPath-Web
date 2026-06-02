@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { useAuth } from "@/context/AuthContext"
 import { db } from "@/lib/firebase"
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, deleteDoc } from "firebase/firestore"
@@ -14,7 +15,8 @@ interface Notification {
     image?: string
     createdAt: any
     read: boolean
-    type: 'achievement' | 'message' | 'event' | 'system'
+    type: 'achievement' | 'message' | 'event' | 'system' | 'event_reminder' | 'announcement' | 'wiki_update'
+    link?: string
 }
 
 export default function NotificationsPage() {
@@ -97,7 +99,7 @@ export default function NotificationsPage() {
                     </div>
 
                     <div className="flex gap-2">
-                        <button
+                        <button aria-label="Action button" 
                             onClick={markAllAsRead}
                             className="flex items-center gap-2 px-4 py-2 bg-secondary/50 hover:bg-secondary rounded-lg transition-colors text-sm font-medium"
                             disabled={notifications.every(n => n.read)}
@@ -110,7 +112,7 @@ export default function NotificationsPage() {
 
                 {/* Filters */}
                 <div className="flex gap-4 mb-6 border-b border-border">
-                    <button
+                    <button aria-label="Action button" 
                         onClick={() => setFilter('all')}
                         className={`pb-3 px-4 font-medium transition-colors relative ${filter === 'all' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     >
@@ -119,7 +121,7 @@ export default function NotificationsPage() {
                             <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                         )}
                     </button>
-                    <button
+                    <button aria-label="Action button" 
                         onClick={() => setFilter('unread')}
                         className={`pb-3 px-4 font-medium transition-colors relative ${filter === 'unread' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                     >
@@ -183,7 +185,7 @@ export default function NotificationsPage() {
                                                 </div>
                                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {!notif.read && (
-                                                        <button
+                                                        <button aria-label="Action button" 
                                                             onClick={() => markAsRead(notif.id)}
                                                             className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors"
                                                             title="Mark as read"
@@ -191,7 +193,7 @@ export default function NotificationsPage() {
                                                             <Check size={18} />
                                                         </button>
                                                     )}
-                                                    <button
+                                                    <button aria-label="Action button" 
                                                         onClick={() => deleteNotification(notif.id)}
                                                         className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
                                                         title="Delete"
@@ -206,8 +208,8 @@ export default function NotificationsPage() {
                                             </p>
 
                                             {notif.image && (
-                                                <div className="mt-4 rounded-lg overflow-hidden border border-border max-w-md">
-                                                    <img src={notif.image} alt="Attachment" className="w-full h-auto" />
+                                                <div className="mt-4 rounded-lg overflow-hidden border border-border max-w-md relative aspect-video">
+                                                    <Image src={notif.image} alt={`${notif.title} notification attachment`} fill className="object-contain" />
                                                 </div>
                                             )}
                                         </div>

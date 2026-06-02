@@ -62,7 +62,7 @@ async function seedAdmins() {
     try {
         // Login as Super Admin to have write access
         console.log("Logging in as Super Admin...");
-        await signInWithEmailAndPassword(auth, "ap8548328@gmail.com", "Aditya@2006@#");
+        await signInWithEmailAndPassword(auth, process.env.SUPER_ADMIN_EMAIL as string, process.env.SUPER_ADMIN_PASSWORD as string);
         console.log("Logged in successfully.");
 
         for (const admin of admins) {

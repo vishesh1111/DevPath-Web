@@ -17,7 +17,9 @@ export const getEmbedUrl = (url: string) => {
             videoId = url.split('youtu.be/')[1];
         } else if (url.includes('youtube.com/embed/')) {
             return url; // Already embed link
-        }
+        }else if(url.includes('youtube.com/shorts/')){
+            videoId = url.split('/shorts/')[1]?.split('?')[0];
+        }//for utube shorts
         if (videoId) return `https://www.youtube.com/embed/${videoId}`;
     }
 
