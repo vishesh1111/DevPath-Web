@@ -53,10 +53,16 @@ export function NotificationDropdown() {
 
     useEffect(() => {
         if (!user) {
-            // Clear sensitive state on sign-out / user switch to avoid showing stale notifications.
-            setNotifications([])
-            setIsOpen(false)
-            return
+            let cancelled = false
+            window.queueMicrotask(() => {
+                if (cancelled) return
+                // Clear sensitive state on sign-out / user switch to avoid showing stale notifications.
+                setNotifications([])
+                setIsOpen(false)
+            })
+            return () => {
+                cancelled = true
+            }
         }
 
         const q = query(
@@ -115,6 +121,7 @@ export function NotificationDropdown() {
     return (
         <div className="sm:relative">
             {/* Bell Button */}
+            <button
             <button 
                 ref={triggerRef}
                 id="notification-trigger"

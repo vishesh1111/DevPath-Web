@@ -1,3 +1,5 @@
+import 'react';
+
 declare module 'three' {
 	export type Group = any;
 	export type Scene = any;
@@ -11,6 +13,7 @@ declare module 'three' {
 	export const Group: any;
 	export const Vector3: any;
 	export const MeshStandardMaterial: any;
+	export const TorusKnotGeometry: any;
 	export const Color: any;
 	export const Mesh: any;
 	export const Material: any;
@@ -28,6 +31,26 @@ declare module 'three/examples/jsm/controls/OrbitControls' {
 	export default OrbitControls;
 }
 
+declare namespace JSX {
+	interface IntrinsicElements {
+		ambientLight: any;
+		directionalLight: any;
+		group: any;
+		mesh: any;
+		primitive: any;
+	}
+}
+
+declare module 'react' {
+	namespace JSX {
+		interface IntrinsicElements {
+			ambientLight: any;
+			directionalLight: any;
+			group: any;
+			mesh: any;
+			primitive: any;
+		}
+	}
 declare global {
   namespace JSX {
     interface IntrinsicElements {

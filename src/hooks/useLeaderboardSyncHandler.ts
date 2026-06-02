@@ -5,10 +5,10 @@
  * and display them to users via notifications.
  */
 
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 export function useLeaderboardSyncHandler() {
-    const { showError, showWarning } = useNotification();
+    const { showError, showWarning } = useNotificationActions();
 
     const handleSyncError = (error: unknown, context: string) => {
         const errorMessage = error instanceof Error ? error.message : String(error);

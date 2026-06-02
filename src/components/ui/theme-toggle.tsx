@@ -2,31 +2,18 @@
 
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
 
 import Button from "@/components/ui/Button"
 import { useAuth } from "@/context/AuthContext"
-
-type ThemePreference = "light" | "dark"
+import { useThemePreference, type ThemePreference } from "@/stores/ui-store"
 
 export function ThemeToggle() {
-    const { setTheme, theme, resolvedTheme } = useTheme()
+    const { theme, resolvedTheme, isThemeMounted, applyTheme } = useThemePreference()
     const { user, updateUserProfile } = useAuth()
     const pendingThemeRef = React.useRef<ThemePreference | null>(null)
 
-    // Fix (Issue #261): Track hydration to prevent flash of incorrect theme.
-    // Before Next.js hydration completes, `theme` is undefined so the Sun/Moon
-    // icons render in the wrong state, causing a visible flash on page load.
-    const [mounted, setMounted] = React.useState(false)
-
-    // useEffect only runs on the client, so `mounted` becomes true only after
-    // hydration — at which point the correct saved theme is known.
     React.useEffect(() => {
-        setMounted(true)
-    }, [])
-
-    React.useEffect(() => {
-        if (!mounted) return
+        if (!isThemeMounted) return
 
         const savedTheme = user?.preferences?.theme
 
@@ -39,14 +26,14 @@ export function ThemeToggle() {
 
         if (!savedTheme || savedTheme === resolvedTheme) return
 
-        setTheme(savedTheme)
-    }, [mounted, resolvedTheme, setTheme, user?.preferences?.theme])
+        applyTheme(savedTheme)
+    }, [applyTheme, isThemeMounted, resolvedTheme, user?.preferences?.theme])
 
     const handleToggle = async () => {
         const currentTheme = (resolvedTheme || theme) === "light" ? "light" : "dark"
         const nextTheme: ThemePreference = currentTheme === "light" ? "dark" : "light"
 
-        setTheme(nextTheme)
+        applyTheme(nextTheme)
 
         if (!user) return
 
@@ -65,11 +52,9 @@ export function ThemeToggle() {
         }
     }
 
-    // Render a same-sized disabled placeholder before hydration to avoid layout
-    // shift and prevent theme-dependent icons from flickering.
-    if (!mounted) {
+    if (!isThemeMounted) {
         return (
-            <Button aria-label="Action button" 
+            <Button aria-label="Action button"
                 variant="ghost"
                 disabled
                 aria-hidden="true"
@@ -80,7 +65,6 @@ export function ThemeToggle() {
         )
     }
 
-    // After hydration, theme is resolved — render the real toggle safely.
     return (
         <Button aria-label="Toggle theme"
             variant="ghost"

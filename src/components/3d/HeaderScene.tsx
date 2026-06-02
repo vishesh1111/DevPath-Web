@@ -3,8 +3,7 @@
 
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Environment, Html } from '@react-three/drei';
-import { useRef, useEffect, Suspense, Component, ReactNode } from 'react';
-import { useTheme } from 'next-themes';
+import { useRef, useEffect, Suspense, Component, ReactNode, useMemo } from 'react';
 import * as THREE from 'three';
 
 function Model({ color }: { color: string }) {
@@ -141,6 +140,14 @@ function Model({ color }: { color: string }) {
 function FallbackGeometry({ color }: { color: string }) {
     const meshRef = useRef<THREE.Mesh>(null);
     const mouse = useRef({ x: 0, y: 0 });
+    const geometry = useMemo(() => new THREE.TorusKnotGeometry(0.7, 0.22, 120, 16), []);
+    const material = useMemo(() => new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.15,
+        metalness: 0.9,
+        emissive: new THREE.Color(color),
+        emissiveIntensity: 0.25
+    }), [color]);
 
     useEffect(() => {
         const handleMouseMove = (event: MouseEvent) => {
@@ -166,22 +173,15 @@ function FallbackGeometry({ color }: { color: string }) {
         }
     });
 
-    // Dispose geometry and material on unmount to free WebGL resources
     useEffect(() => {
-        const mesh = meshRef.current;
         return () => {
-            if (mesh) {
-                mesh.geometry.dispose();
-                if (Array.isArray(mesh.material)) {
-                    mesh.material.forEach((m: any) => m.dispose());
-                } else {
-                    mesh.material.dispose();
-                }
-            }
+            geometry.dispose();
+            material.dispose();
         };
-    }, []);
+    }, [geometry, material]);
 
     return (
+        <mesh ref={meshRef} position={[0, 0.4, 0]} geometry={geometry} material={material} />
         <mesh ref={meshRef} position={[0, 0.4, 0]}>
             {/* Elegant futuristic floating metallic Torus Knot */}
             {/* @ts-ignore */}
@@ -222,9 +222,6 @@ class ModelErrorBoundary extends Component<{ children: ReactNode; fallback: Reac
 }
 
 export default function HeaderScene() {
-    const { theme, systemTheme } = useTheme();
-    const currentTheme = theme === 'system' ? systemTheme : theme;
-
     // Gold/Orange color from the logo
     const brandColor = '#FFB800';
 

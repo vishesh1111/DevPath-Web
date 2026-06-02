@@ -26,8 +26,9 @@ import {
 } from "firebase/auth";
 import AdminKeyModal from "@/components/auth/AdminKeyModal";
 import { useAuth } from "@/context/AuthContext";
-import { useNotification } from "@/context/NotificationContext";
+import { useNotificationActions } from "@/stores/ui-store";
 import { useMaintenance } from "@/hooks/useMaintenance";
+import { auth, db } from "@/lib/firebase";
 import { db, auth } from "@/lib/firebase";
 
 export default function LoginPage() {
@@ -46,7 +47,7 @@ export default function LoginPage() {
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
 
   const { login, user, isLoading, logout, isAdminVerified } = useAuth();
-  const { showSuccess, showError, showInfo } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotificationActions();
   const router = useRouter();
   const { isMaintenanceMode, maintenanceMessage } = useMaintenance();
 

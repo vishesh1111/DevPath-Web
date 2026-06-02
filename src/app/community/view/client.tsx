@@ -11,7 +11,7 @@ import DOMPurify from 'dompurify';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { copyToClipboard } from '@/lib/clipboard';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 const REACTIONS = [
     { emoji: '👍', label: 'Support', icon: <div className="text-xl">👍</div> },
@@ -24,7 +24,7 @@ const REACTIONS = [
 
 export default function DiscussionViewClient() {
     const { user } = useAuth();
-    const { showSuccess, showError } = useNotification();
+    const { showSuccess, showError } = useNotificationActions();
     const router = useRouter();
     const searchParams = useSearchParams();
     const discussionId = searchParams.get('id');

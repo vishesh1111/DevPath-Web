@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 interface DeveloperMindsetModalProps {
     isOpen: boolean;
@@ -13,7 +13,7 @@ interface DeveloperMindsetModalProps {
 export function DeveloperMindsetModal({ isOpen, onClose }: DeveloperMindsetModalProps) {
     const [mounted, setMounted] = useState(false);
     const [copied, setCopied] = useState(false);
-    const { showSuccess, showError } = useNotification();
+    const { showSuccess, showError } = useNotificationActions();
 
     useEffect(() => {
         setMounted(true);

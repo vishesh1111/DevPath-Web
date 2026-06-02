@@ -1,11 +1,12 @@
 "use client";
 
 import React from 'react';
-import { useNotification } from '@/context/NotificationContext';
+import { useRemoveToast, useToasts } from '@/stores/ui-store';
 import { X, AlertCircle, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 
 export function ToastContainer() {
-    const { toasts, removeToast } = useNotification();
+    const toasts = useToasts();
+    const removeToast = useRemoveToast();
 
     const typeConfig = {
         error: {
@@ -53,6 +54,7 @@ export function ToastContainer() {
                         <div className="flex-1 pt-0.5">
                             <p className="text-sm font-medium">{toast.message}</p>
                         </div>
+                        <button
                         <button 
                             onClick={() => removeToast(toast.id)}
                             className={`${config.color} flex-shrink-0 hover:opacity-70 transition-opacity`}

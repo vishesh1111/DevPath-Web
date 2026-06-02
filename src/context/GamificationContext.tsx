@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { Trophy, Zap, ArrowUpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 export type NotificationType = 'xp' | 'achievement' | 'level-up';
 
@@ -123,7 +123,7 @@ const ToastMessage = ({ n, removeNotification }: { n: GamificationNotification, 
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
     const { user, awardPoints } = useAuth();
-    const { showError } = useNotification();
+    const { showError } = useNotificationActions();
     const [notifications, setNotifications] = useState<GamificationNotification[]>([]);
 
     const xp = user?.points || 0;

@@ -18,6 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { GIT_FALLBACK_STATS } from '@/lib/github';
 import { getSafeSocialUrl } from '@/lib/safe-social-url';
 import { copyToClipboard } from '@/lib/clipboard';
+import { useNotificationActions } from '@/stores/ui-store';
 import { useNotification } from '@/context/NotificationContext';
 import NotFoundView from '@/components/layout/NotFoundView';
 
@@ -87,7 +88,7 @@ interface Project {
 
 function ProfileContent({ uid }: { uid?: string }) {
     const { user: currentUser } = useAuth();
-    const { showSuccess, showError } = useNotification();
+    const { showSuccess, showError } = useNotificationActions();
     const [user, setUser] = useState<PublicUser | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);

@@ -13,7 +13,7 @@ import { calculateLevel } from '@/lib/points';
 import { copyToClipboard } from '@/lib/clipboard';
 import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 import styles from './DevCard.module.css';
 
 // ── Badge registry ────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ export default function DevCard({ user }: { user: any }) {
   const [downloading, setDownloading] = useState(false);
   const [langMounted, setLangMounted] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError } = useNotificationActions();
 
   useEffect(() => {
     const fetch = async () => {

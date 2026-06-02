@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 import { leaderboardSyncErrorEmitter } from '@/lib/leaderboard-sync-error';
 
 /**
@@ -9,7 +9,7 @@ import { leaderboardSyncErrorEmitter } from '@/lib/leaderboard-sync-error';
  * Should be used in a component somewhere in the app layout
  */
 export function useLeaderboardSyncErrorListener() {
-    const { showError, showWarning } = useNotification();
+    const { showError, showWarning } = useNotificationActions();
 
     useEffect(() => {
         const unsubscribe = leaderboardSyncErrorEmitter.subscribe((error, context) => {

@@ -26,7 +26,7 @@ import { wikiSearchIndex } from '@/data/wikiSearchIndex';
 import { searchArticles } from '@/utils/wikiSearch';
 import WikiSearchResults from './WikiSearchResults';
 import { copyToClipboard } from '@/lib/clipboard';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 const categories = [
     {
@@ -69,7 +69,7 @@ function slugToLabel(slug: string): string {
 function WikiPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { showSuccess, showError } = useNotification();
+    const { showSuccess, showError } = useNotificationActions();
     const [searchQuery, setSearchQuery] = useState('');
 
     const activeArticleParam = searchParams.get('article');

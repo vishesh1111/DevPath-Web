@@ -18,7 +18,7 @@ import QuizComponent from './QuizComponent';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase'; 
 import { useAuth } from '@/context/AuthContext'; 
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 interface RoadmapModalProps {
     isOpen: boolean;
@@ -80,7 +80,7 @@ export function RoadmapModal({
     const [showQuiz, setShowQuiz] = useState(false);
 
     const { addXp } = useGamification();
-    const { showError } = useNotification();
+    const { showError } = useNotificationActions();
 
     useEffect(() => {
         const mountTimeout = window.setTimeout(() => {

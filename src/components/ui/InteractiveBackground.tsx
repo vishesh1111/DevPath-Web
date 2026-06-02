@@ -1,7 +1,7 @@
 "use client";
 const DEVPATH_API = process.env.NEXT_PUBLIC_DEVPATH_API_URL ?? 'https://api.devpath.in';
 import { useEffect, useRef } from 'react';
-import { useTheme } from 'next-themes';
+import { useUIStore } from '@/stores/ui-store';
 
 // Code snippets that type across the screen — dev/community themed
 const CODE_LINES = [
@@ -147,7 +147,7 @@ interface TypeLine {
 
 export default function InteractiveBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const { resolvedTheme } = useTheme();
+    const resolvedTheme = useUIStore((state) => state.resolvedTheme);
     const themeRef = useRef(resolvedTheme);
 
     useEffect(() => {

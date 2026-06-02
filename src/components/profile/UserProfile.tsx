@@ -27,7 +27,7 @@ import { getEmbedUrl } from '@/lib/utils';
 import { copyToClipboard } from '@/lib/clipboard';
 import { GIT_FALLBACK_STATS } from '@/lib/github';
 import { getSafeSocialUrl, sanitizeSocialLinks } from '@/lib/safe-social-url';
-import { useNotification } from '@/context/NotificationContext';
+import { useNotificationActions } from '@/stores/ui-store';
 
 /**
  * UserProfile component renders the main dashboard profile page for authenticated developers.
@@ -39,7 +39,7 @@ import { useNotification } from '@/context/NotificationContext';
  */
 export default function UserProfile() {
     const { user, logout, updateUserProfile, awardPoints } = useAuth();
-    const { showSuccess, showError } = useNotification();
+    const { showSuccess, showError } = useNotificationActions();
     const router = useRouter();
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
