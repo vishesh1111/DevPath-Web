@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, Upload, ArrowRight, ArrowLeft, X } from 'lucide-react';
 import Button from '../ui/Button';
 import styles from './SubmitWizard.module.css';
@@ -15,6 +15,7 @@ interface SubmitWizardFormData {
 }
 
 const steps = ['Details', 'Tech Stack', 'Media', 'Review'];
+const DRAFT_KEY = 'project_submission_draft';
 
 export default function SubmitWizard() {
     const [currentStep, setCurrentStep] = useState(0);
@@ -29,6 +30,39 @@ export default function SubmitWizard() {
     });
     const [errors, setErrors] = useState<Partial<Record<keyof SubmitWizardFormData, string>> & { submit?: string }>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [draftLoaded, setDraftLoaded] = useState(false);
+
+    useEffect(() => {
+        const savedDraft = localStorage.getItem(DRAFT_KEY);
+
+        if (savedDraft) {
+            const restore = window.confirm(
+                'A saved draft was found. Would you like to restore it?'
+            );
+
+            if (restore) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    setFormData(parsed);
+                } catch (error) {
+                    console.error('Failed to restore draft', error);
+                }
+            }
+        }
+    setDraftLoaded(true);
+    }, []);
+
+   useEffect(() => {
+    if (!draftLoaded) return;
+
+    localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+            ...formData,
+            thumbnail: null
+        })
+    );
+}, [formData, draftLoaded]);
 
     const handleChange = (field: keyof SubmitWizardFormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -73,32 +107,30 @@ export default function SubmitWizard() {
 
     const validateStep = (step: number): boolean => {
         const newErrors: Partial<Record<keyof SubmitWizardFormData, string>> = {};
-        
+
         if (step === 0) {
             if (!formData.title.trim()) newErrors.title = 'Title is required';
             if (!formData.description.trim()) newErrors.description = 'Description is required';
         }
-        
+
         if (step === 1) {
             if (!formData.frameworks.trim()) newErrors.frameworks = 'Frameworks are required';
         }
-        
+
         if (step === 2) {
             if (!formData.demoUrl.trim()) newErrors.demoUrl = 'Demo URL is required';
             if (formData.demoUrl.trim() && !validateUrl(formData.demoUrl)) {
                 newErrors.demoUrl = 'Please enter a valid HTTPS URL';
             }
         }
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     const handleSubmit = async () => {
         if (!validateStep(3)) return;
-        
-        setIsSubmitting(true);
-        
+
         try {
             // TODO: Integrate with Firebase project submission
             // This would call the existing project submission logic
@@ -111,10 +143,12 @@ export default function SubmitWizard() {
                 thumbnail: formData.thumbnail ? formData.thumbnail.name : null,
                 thumbnailSize: formData.thumbnail ? formData.thumbnail.size : null
             });
-            
+
             // Simulate API call
             await new Promise(resolve => setTimeout(resolve, 1500));
-            
+
+            localStorage.removeItem(DRAFT_KEY);
+
             setIsSubmitted(true);
         } catch (error) {
             console.error('Error submitting project:', error);
@@ -126,7 +160,7 @@ export default function SubmitWizard() {
 
     const handleNext = () => {
         if (!validateStep(currentStep)) return;
-        
+
         if (currentStep < steps.length - 1) {
             setCurrentStep(currentStep + 1);
         } else {
@@ -154,7 +188,7 @@ export default function SubmitWizard() {
                                 Your project has been successfully submitted for review.
                                 It will be live on the showcase within 24 hours.
                             </p>
-                            <Button aria-label="Action button"  variant="primary" className="mt-8" onClick={() => window.location.href = '/'}>
+                            <Button aria-label="Action button" variant="primary" className="mt-8" onClick={() => window.location.href = '/'}>
                                 Return Home
                             </Button>
                         </div>
@@ -177,7 +211,7 @@ export default function SubmitWizard() {
                         <div
                             key={index}
                             className={`${styles.step} ${index === currentStep ? styles.activeStep :
-                                    index < currentStep ? styles.completedStep : ''
+                                index < currentStep ? styles.completedStep : ''
                                 }`}
                         >
                             {index < currentStep ? <Check size={20} /> : index + 1}
@@ -190,9 +224,9 @@ export default function SubmitWizard() {
                         <div className="space-y-6">
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>Project Title</label>
-                                <input 
-                                    type="text" 
-                                    className={styles.input} 
+                                <input
+                                    type="text"
+                                    className={styles.input}
                                     placeholder="e.g. AI Code Assistant"
                                     value={formData.title}
                                     onChange={(e) => handleChange('title', e.target.value)}
@@ -201,8 +235,8 @@ export default function SubmitWizard() {
                             </div>
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>Description</label>
-                                <textarea 
-                                    className={styles.textarea} 
+                                <textarea
+                                    className={styles.textarea}
                                     placeholder="Describe your project..."
                                     value={formData.description}
                                     onChange={(e) => handleChange('description', e.target.value)}
@@ -217,7 +251,7 @@ export default function SubmitWizard() {
                         <div className="space-y-6">
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>Primary Language</label>
-                                <select 
+                                <select
                                     className={styles.select}
                                     value={formData.primaryLanguage}
                                     onChange={(e) => handleChange('primaryLanguage', e.target.value)}
@@ -230,9 +264,9 @@ export default function SubmitWizard() {
                             </div>
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>Frameworks</label>
-                                <input 
-                                    type="text" 
-                                    className={styles.input} 
+                                <input
+                                    type="text"
+                                    className={styles.input}
                                     placeholder="e.g. React, Next.js, Django"
                                     value={formData.frameworks}
                                     onChange={(e) => handleChange('frameworks', e.target.value)}
@@ -255,7 +289,7 @@ export default function SubmitWizard() {
                                         id="thumbnail-upload"
                                     />
                                     {!formData.thumbnail ? (
-                                        <label 
+                                        <label
                                             htmlFor="thumbnail-upload"
                                             style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                                         >
@@ -273,7 +307,7 @@ export default function SubmitWizard() {
                                             <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '12px' }}>
                                                 {(formData.thumbnail.size / 1024).toFixed(2)} KB
                                             </p>
-                                            <button aria-label="Action button" 
+                                            <button aria-label="Action button"
                                                 type="button"
                                                 onClick={handleRemoveThumbnail}
                                                 style={{
@@ -295,9 +329,9 @@ export default function SubmitWizard() {
                             </div>
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>Demo URL</label>
-                                <input 
-                                    type="url" 
-                                    className={styles.input} 
+                                <input
+                                    type="url"
+                                    className={styles.input}
                                     placeholder="https://"
                                     value={formData.demoUrl}
                                     onChange={(e) => handleChange('demoUrl', e.target.value)}
@@ -345,7 +379,7 @@ export default function SubmitWizard() {
                     )}
 
                     <div className={styles.actions}>
-                        <Button aria-label="Action button" 
+                        <Button aria-label="Action button"
                             variant="ghost"
                             onClick={handleBack}
                             disabled={currentStep === 0}
@@ -353,8 +387,8 @@ export default function SubmitWizard() {
                         >
                             <ArrowLeft size={20} /> Back
                         </Button>
-                        <Button aria-label="Action button"  
-                            variant="primary" 
+                        <Button aria-label="Action button"
+                            variant="primary"
                             onClick={handleNext}
                             disabled={isSubmitting}
                         >
