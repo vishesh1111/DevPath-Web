@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: 'export',
   devIndicators: {
     // @ts-ignore - buildActivity is valid but missing in type definition
     buildActivity: false,
